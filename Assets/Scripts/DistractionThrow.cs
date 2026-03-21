@@ -28,7 +28,10 @@ public class DistractionThrow : MonoBehaviour
         Vector3 mouseWorldPos = _mainCam.ScreenToWorldPoint(Input.mousePosition);
         mouseWorldPos.z = 0;
         Instantiate(_distractionPrefab, mouseWorldPos, Quaternion.identity);
-        AudioManager.Instance.Play("Coin");
+        if (AudioManager.Instance != null)
+        {
+            AudioManager.Instance.Play("Coin");
+        }
 
 
     }

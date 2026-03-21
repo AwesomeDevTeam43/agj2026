@@ -197,7 +197,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &365373658
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -339,6 +339,7 @@ GameObject:
   - component: {fileID: 519420031}
   - component: {fileID: 519420029}
   - component: {fileID: 519420030}
+  - component: {fileID: 519420033}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -464,6 +465,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &519420033
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 519420028}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: efa5bc7d44ee29246b839c0e1b59fcca, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  player: {fileID: 1610868476}
+  smoothSpeed: 0.125
+  offset: {x: 0, y: 0, z: -10}
 --- !u!1 &619394800
 GameObject:
   m_ObjectHideFlags: 0
@@ -548,6 +564,11 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!4 &1610868476 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 274017934531547259, guid: 555c7fac1d88e0401a6a94b97fdf722a, type: 3}
+  m_PrefabInstance: {fileID: 1087281282549381142}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1752813308
 GameObject:
   m_ObjectHideFlags: 0
@@ -563,6 +584,7 @@ GameObject:
   - component: {fileID: 1752813311}
   - component: {fileID: 1752813310}
   - component: {fileID: 1752813309}
+  - component: {fileID: 1752813317}
   m_Layer: 6
   m_Name: Square2
   m_TagString: Untagged
@@ -584,8 +606,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   playerController: {fileID: 342182565}
   shapeData: {fileID: 11400000, guid: de0257a5adc4b72bb9365efba655c460, type: 2}
-  minStealDistance: 0.8
-  maxStealDistance: 3
+  suspicionDetector: {fileID: 0}
+  maxStealDistance: 3.4
+  highSuspicionOnStealRange: 2
 --- !u!60 &1752813310
 PolygonCollider2D:
   m_ObjectHideFlags: 0
@@ -808,6 +831,24 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1752813317
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1752813308}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3a51c8ff4a4fbb5018cd890f1397d757, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  allowedShapes: 
+  isRestrictedToAll: 0
+  detectionArea: {fileID: 0}
+  visionCone: {fileID: 0}
+  suspicionIncreaseRate: 10
+  suspicionDecreaseRate: 5
 --- !u!1 &1960011899
 GameObject:
   m_ObjectHideFlags: 0

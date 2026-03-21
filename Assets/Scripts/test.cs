@@ -36,7 +36,14 @@ public class Test : MonoBehaviour, IInteractable
     {
         shapeVisualizer = GetComponent<ShapeVisualizer>();
         suspicionDetector = GetComponentInParent<SuspicionDetector>();
+        
+        // Ensure LineRenderer exists
         line = GetComponent<LineRenderer>();
+        if (line == null)
+        {
+            line = gameObject.AddComponent<LineRenderer>();
+            line.material = new Material(Shader.Find("Sprites/Default")); // Gives it a basic solid color material
+        }
 
         if (line != null)
         {
@@ -44,6 +51,30 @@ public class Test : MonoBehaviour, IInteractable
             line.positionCount = 2;
             line.useWorldSpace = true;
             line.enabled = false;
+        }
+
+        // Find the player automatically if not assigned
+        if (playerController == null)
+        {
+            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+            if (playerObj != null)
+            {
+                playerController = playerObj.GetComponent<ShapeVisualizer>();
+            }
+            else
+            {
+                // Fallback in case the Player tag isn't set, find the PlayerController script
+                PlayerController pc = Object.FindFirstObjectByType<PlayerController>();
+                if (pc != null)
+                {
+                    playerController = pc.GetComponent<ShapeVisualizer>();
+                }
+            }
+
+            if (playerController == null)
+            {
+                Debug.LogWarning("PlayerController (ShapeVisualizer) could not be found automatically by Test.cs!");
+            }
         }
     }
 

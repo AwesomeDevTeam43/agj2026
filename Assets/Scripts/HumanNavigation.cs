@@ -133,7 +133,12 @@ public class HumanNavigation : MonoBehaviour
             journeyCoroutine = null;
         }
         IsMoving = false;
-        agent.ResetPath();
+        
+        if (agent.isActiveAndEnabled && agent.isOnNavMesh)
+        {
+            agent.ResetPath();
+        }
+        
         agent.speed = baseSpeed > 0 ? baseSpeed : agent.speed;
     }
 
@@ -155,7 +160,8 @@ public class HumanNavigation : MonoBehaviour
             bool    isFinal  = (i == path.Count - 1);
 
             // Define destino no agente
-            agent.SetDestination(waypoint);
+            if (agent.isActiveAndEnabled && agent.isOnNavMesh)
+                agent.SetDestination(waypoint);
 
             // Aguarda que o path seja calculado
             yield return new WaitUntil(() => !agent.pathPending);
@@ -164,7 +170,7 @@ public class HumanNavigation : MonoBehaviour
             yield return StartCoroutine(WalkToPoint(waypoint, isFinal));
 
             // Micro-pausa (apenas em waypoints intermédios)
-            if (!isFinal && Random.value < micropauseProbability)
+            if (!isFinal && Random.value < micropauseProbability && activeProfile != MovementProfile.Urgent)
             {
                 float pauseDuration = Random.Range(micropauseMin, micropauseMax);
                 yield return StartCoroutine(MicroPause(pauseDuration));
@@ -186,8 +192,13 @@ public class HumanNavigation : MonoBehaviour
         if (!agent.hasPath || agent.pathStatus == NavMeshPathStatus.PathInvalid)
             agent.SetDestination(target);
 
-        while (true)
+        // Emergency timeout pra não ficar preso para sempre
+        float timeout = 10f; 
+
+        while (timeout > 0f)
         {
+            timeout -= Time.deltaTime;
+            
             // Velocidade orgânica via Perlin noise
             float noise      = Mathf.PerlinNoise(Time.time * speedNoiseFrequency + noiseOffset, 0f);
             float speedMult  = 1f + (noise - 0.5f) * 2f * speedNoiseAmplitude;
@@ -198,8 +209,18 @@ public class HumanNavigation : MonoBehaviour
                 break;
 
             // Destino perdido (obstáculo dinâmico) — recalcula
-            if (!agent.hasPath && !agent.pathPending)
+            if (!agent.hasPath && !agent.pathPending && timeout > 0f)
                 agent.SetDestination(target);
+
+            // Pára se tiver colidido com algo e não conseguir avançar muito
+            if (agent.velocity.sqrMagnitude < 0.05f && agent.remainingDistance > agent.stoppingDistance && !agent.pathPending && timeout < 9.5f)
+            {
+               // Se esteve meio segundo sem se mexer significativamente... 
+               // força sair do loop se já estiver muito perto
+               if(Vector2.Distance(transform.position, target) < agent.stoppingDistance + 0.8f) {
+                   break;
+               }
+            }
 
             yield return null;
         }
@@ -377,10 +398,17 @@ public class HumanNavigation : MonoBehaviour
     bool HasArrivedAt(Vector3 target)
     {
         if (agent.pathPending) return false;
-        // Usa stoppingDistance com pequena margem extra
-        float threshold = agent.stoppingDistance + 0.15f;
-        return agent.remainingDistance <= threshold
-            && (!agent.hasPath || agent.velocity.sqrMagnitude < 0.02f);
+        
+        // Em 2D, comparamos a distância apenas no plano (ignora altura se NavMesh tiver offsets malucos)
+        Vector2 target2D = new Vector2(target.x, target.y);
+        Vector2 pos2D = new Vector2(transform.position.x, transform.position.y);
+        
+        float distance = Vector2.Distance(target2D, pos2D);
+        
+        // Usa stoppingDistance com uma margem extra bem grande para 2D e interações
+        float threshold = agent.stoppingDistance + 0.35f; 
+        
+        return distance <= threshold || (agent.remainingDistance <= threshold && !agent.hasPath);
     }
 
     // ──────────────────────────────────────────────────────────────────────────

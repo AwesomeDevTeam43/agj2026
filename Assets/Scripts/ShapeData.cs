@@ -2,10 +2,11 @@ using UnityEngine;
 
 public enum ShapeType
 {
-  Square,           // worker
+  Square,         // worker
   Circle,         // normal npc
   Triangle,       // vip
-  Hexagon         // security
+  Hexagon,        // security
+  Husk            
 }
 
 [CreateAssetMenu(fileName = "Shape_Data", menuName = "Shapes/Shape_Data", order = 0)]

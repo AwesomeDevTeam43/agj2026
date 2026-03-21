@@ -7,6 +7,7 @@ public class Test : MonoBehaviour, IInteractable
     [SerializeField] private ShapeVisualizer playerController;
     private ShapeVisualizer shapeVisualizer;
     [SerializeField] private ShapeData shapeData;
+    [SerializeField] private SuspicionDetector suspicionDetector;
     private Coroutine _stealCoroutine;
     private bool _isStealing = false;
 
@@ -86,7 +87,7 @@ public class Test : MonoBehaviour, IInteractable
 
     IEnumerator CommenceSteal()
     {
-        if (shapeData.type != ShapeType.Husk){// Placeholder for any animation or delay during the stealing process
+        // Placeholder for any animation or delay during the stealing process
         yield return new WaitForSeconds(3f); // Simulate time taken to steal
         playerController.ApplyShape(shapeData);
         shapeData = Resources.Load<ShapeData>("HuskData");
@@ -99,13 +100,6 @@ public class Test : MonoBehaviour, IInteractable
         //set tag to Draggable
         gameObject.tag = "Draggable";
         _isStealing = false;
-        }
-        else
-        {
-            Debug.LogWarning("Attempted to steal from a husk, which is not allowed.");
-            _isStealing = false;
-            yield break;
-        }
     }
 
     private void OnDrawGizmos()

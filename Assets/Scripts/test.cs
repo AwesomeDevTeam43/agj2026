@@ -75,5 +75,7 @@ public class Test : MonoBehaviour, IInteractable
             yield break;
         }
         shapeVisualizer.ApplyShape(shapeData);
+        //set tag to Draggable
+        gameObject.tag = "Draggable";
     }
 }

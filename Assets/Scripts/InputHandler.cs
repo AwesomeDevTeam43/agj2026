@@ -11,6 +11,7 @@ public class InputHandler : MonoBehaviour
     [SerializeField] private string actionMapName = "Player";
 
     private InputAction movementAction;
+    private InputAction dragAction;
     /*private InputAction lookAction;
     private InputAction aimAction;
     private InputAction jumpAction;
@@ -22,15 +23,19 @@ public class InputHandler : MonoBehaviour
     public bool JumpTriggered { get; private set; }
     public bool SprintTriggered { get; private set; }*/
 
+    public bool DragInput { get; private set; }
+
     private void Awake()
     {
         InputActionMap mapReference = playerControls.FindActionMap(actionMapName);
 
         movementAction = mapReference.FindAction("Move");
+        dragAction = mapReference.FindAction("Drag");
         /*jumpAction = mapReference.FindAction("Jump");
         lookAction = mapReference.FindAction("Look");
         aimAction = mapReference.FindAction("Aim");
         sprintAction = mapReference.FindAction("Sprint");*/
+
 
         InputEvents();
     }
@@ -51,6 +56,8 @@ public class InputHandler : MonoBehaviour
 
         sprintAction.performed += inputInfo => SprintTriggered = true;
         sprintAction.canceled += inputInfo => SprintTriggered = false;*/
+        dragAction.performed += inputInfo => DragInput = true;
+        dragAction.canceled += inputInfo => DragInput = false;
     }
 
     private void OnEnable()

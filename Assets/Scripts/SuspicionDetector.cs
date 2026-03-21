@@ -4,14 +4,14 @@ using UnityEngine;
 public class SuspicionDetector : MonoBehaviour
 {
 
-   [Header("Security Rules")]
-   [Tooltip("Which shapes are allowed in this area?")]
-   public ShapeType[] allowedShapes;
-   public bool isRestrictedToAll = false;
-   [SerializeField] Collider2D detectionArea;
-
-   [Header("Suspicion Settings")]
-   [Tooltip("How quickly does suspicion increase when a disallowed shape is present?")]
+    [Header("Security Rules")]
+    [Tooltip("Which shapes are allowed in this area?")]
+    public ShapeType[] allowedShapes;
+    public bool isRestrictedToAll = false;
+    [SerializeField] Collider2D detectionArea;
+    [SerializeField] private PolygonCollider2D visionCone;
+    [Header("Suspicion Settings")]
+    [Tooltip("How quickly does suspicion increase when a disallowed shape is present?")]
     public float suspicionIncreaseRate = 10f;
     public float suspicionDecreaseRate = 5f;
 
@@ -19,11 +19,16 @@ public class SuspicionDetector : MonoBehaviour
     private const float MAX_SUSPICION = 100f;
     private Coroutine _reduceRoutine;
 
+    void Awake()
+    {
+        
+         visionCone = GetComponent<PolygonCollider2D>();
+    }
     //suspicioun reducement coroutine
     IEnumerator ReduceSuspicion()
     {
         //if player reenters the area again, stop the coroutine and resume increasing from where it left off
-        
+
         //wait 3 seconds before starting to reduce suspicion
         yield return new WaitForSeconds(3f);
         while (_currentSuspicion > 0f)
@@ -43,7 +48,7 @@ public class SuspicionDetector : MonoBehaviour
 
             _reduceRoutine = StartCoroutine(ReduceSuspicion());
         }
-        
+
     }
     void OnTriggerEnter2D(Collider2D other)
     {
@@ -86,11 +91,6 @@ public class SuspicionDetector : MonoBehaviour
             Gizmos.color = new Color(1f, 0f, 0f, 0.5f);
             Gizmos.DrawCube(detectionArea.bounds.center, detectionArea.bounds.size);
         }
-        //draw suspicion bar above the area
-        Vector3 barPosition = transform.position + Vector3.up * 1.5f;
-        Vector3 barSize = new Vector3(2f, 0.2f, 0.1f);
-        Gizmos.color = Color.Lerp(Color.green, Color.red, _currentSuspicion / MAX_SUSPICION);
-        Gizmos.DrawCube(barPosition, new Vector3(barSize.x * (_currentSuspicion / MAX_SUSPICION), barSize.y, barSize.z));
-    }
 
+    }
 }

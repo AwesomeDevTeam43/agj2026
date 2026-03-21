@@ -28,6 +28,11 @@ public class LockedDoor : MonoBehaviour
             {
                 _authorizedEntries++;
                 OpenDoor();
+                AudioManager.Instance.Play("opendoor");
+            }
+            else
+            {
+                AudioManager.Instance.Play("wrongdoor");
             }
         }
     }

@@ -29,10 +29,12 @@ public class ShapeVisualizer : MonoBehaviour {
       shapeData = newShape;
       
       _renderer.color = shapeData.color;
-
+      if (shapeData.type != ShapeType.Husk)
+      {
       _colliderBox.enabled = false;
       _colliderCircle.enabled = false;
       _colliderPolygon.enabled = false;
+      }
 
       switch (newShape.type)
       {
@@ -51,6 +53,9 @@ public class ShapeVisualizer : MonoBehaviour {
         case ShapeType.Hexagon:
           _renderer.sprite = _shapeSprites[3];
             _colliderCircle.enabled = true;
+          break;
+        case ShapeType.Husk:
+          _renderer.color = shapeData.color;
           break;
         default:
           Debug.LogWarning("Unknown shape type");

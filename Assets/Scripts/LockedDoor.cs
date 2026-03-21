@@ -1,9 +1,10 @@
+using System.Collections.Generic;
 using Unity.VisualScripting;
 using UnityEngine;
 
 public class LockedDoor : MonoBehaviour
 {
-    [SerializeField] private ShapeType allowedShape;
+    [SerializeField] private List<ShapeType> allowedShapes = new List<ShapeType>();
 
     [SerializeField] private GameObject _doorVisual;
 
@@ -23,7 +24,7 @@ public class LockedDoor : MonoBehaviour
         if (other.TryGetComponent<ShapeVisualizer>(out var playerShape))
         {
             Debug.Log($"{playerShape.gameObject.name} entered door trigger.");
-            if (playerShape.shapeData != null && playerShape.shapeData.type == allowedShape)
+            if (playerShape.shapeData != null && allowedShapes.Contains(playerShape.shapeData.type))
             {
                 _authorizedEntries++;
                 OpenDoor();
@@ -34,7 +35,7 @@ public class LockedDoor : MonoBehaviour
     {
         if (other.TryGetComponent<ShapeVisualizer>(out var playerShape))
         {
-            if (playerShape != null && playerShape.shapeData != null && playerShape.shapeData.type == allowedShape)
+            if (playerShape != null && playerShape.shapeData != null && allowedShapes.Contains(playerShape.shapeData.type))
             {
                 _authorizedEntries = Mathf.Max(0, _authorizedEntries - 1);
                 if (_authorizedEntries == 0)

@@ -49,6 +49,7 @@ GameObject:
   - component: {fileID: 381747656317994986}
   - component: {fileID: 2104922227996760904}
   - component: {fileID: 5427194066069260776}
+  - component: {fileID: 2183696093893889684}
   m_Layer: 6
   m_Name: VIP
   m_TagString: Untagged
@@ -297,6 +298,8 @@ MonoBehaviour:
   maxStealDistance: 3
   highSuspicionOnStealRange: 1.5
   line: {fileID: 0}
+  stealCoyoteTime: 1
+  coyoteBlinkSpeed: 10
   killThreshold: 3
   killWindow: 10
 --- !u!114 &381747656317994986
@@ -319,8 +322,11 @@ MonoBehaviour:
   minActivityTime: 3
   maxActivityTime: 12
   idleDecisionDelay: 1.5
+  isStationary: 0
   patrolRadius: 6
   patrolPointCount: 4
+  stationaryLookAngle: 45
+  stationaryLookInterval: 3
   allowedRooms: []
 --- !u!50 &2104922227996760904
 Rigidbody2D:
@@ -330,7 +336,7 @@ Rigidbody2D:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4417932508243596757}
-  m_BodyType: 0
+  m_BodyType: 1
   m_Simulated: 1
   m_UseFullKinematicContacts: 0
   m_UseAutoMass: 0
@@ -371,3 +377,27 @@ NavMeshAgent:
   m_BaseOffset: 0.5
   m_WalkableMask: 4294967295
   m_ObstacleAvoidanceType: 4
+--- !u!114 &2183696093893889684
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4417932508243596757}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91eda1c9095314499c77053208c496, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  rotationSpeed: 8
+  waypointCount: 2
+  deviationRadius: 1.8
+  navSampleRadius: 3
+  wallClearance: 0.5
+  speedNoiseAmplitude: 0.28
+  speedNoiseFrequency: 0.4
+  micropauseProbability: 0.35
+  micropauseMin: 0.4
+  micropauseMax: 2.2
+  lookAroundOnPause: 1
+  lookAroundAngle: 30

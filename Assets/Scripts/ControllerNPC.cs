@@ -1,178 +1,525 @@
-using System.Data.Common;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 
+/// <summary>
+/// ControllerNPC — IA de baile de máscaras com navegação orgânica.
+///
+/// Delega todo o movimento ao componente HumanNavigation (mesmo GameObject).
+/// Não usa nenhum waypoint manual — os percursos são gerados proceduralmente.
+///
+/// Tipos:
+///   Circle  (Convidado) — passeia, admira quadros, bebe, socializa
+///   Hexagon (Segurança) — patrulha a zona inicial, investiga incidentes
+///   Triangle (VIP)      — quartos privados, socializa longamente, pouco movimento
+///   Square  (Staff)     — maioritariamente estático, circula ocasionalmente
+/// </summary>
+[RequireComponent(typeof(NavMeshAgent))]
+[RequireComponent(typeof(HumanNavigation))]
 public class ControllerNPC : MonoBehaviour
 {
-    public ShapeData shapeData;
-    public enum NPCState { Idle, Moving, Chasing, Returning }
+    // ──────────────────────────────────────────────────────────────────────────
+    // State machine
+    // ──────────────────────────────────────────────────────────────────────────
+
+    public enum NPCState
+    {
+        Idle,           // A decidir o próximo passo
+        Walking,        // Em trânsito (gerido pelo HumanNavigation)
+        Observing,      // A admirar um quadro / objeto
+        Drinking,       // A beber
+        Socializing,    // A conversar numa zona social
+        Resting,        // Sentado / a descansar
+        Patrolling,     // Segurança: a gerar rondas na área
+        Investigating,  // Segurança: a ir a um incidente
+        Returning       // A regressar ao posto
+    }
+
     public NPCState currentState = NPCState.Idle;
 
-    [Header("Configuration")]
-    public Transform[] waypoints;
+    // ──────────────────────────────────────────────────────────────────────────
+    // Inspector
+    // ──────────────────────────────────────────────────────────────────────────
+
+    [Header("References")]
+    public ShapeData shapeData;
+
+    [Tooltip("Posição de 'posto' — onde o NPC começa e regressa. Se null usa spawn.")]
     public Transform initialPosition;
+
+    [Header("Interest Points")]
+    [Tooltip("Vazio = o NPC descobre automaticamente todos os InterestPoint da cena")]
+    public InterestPoint[] interestPoints;
+
+    [Header("Vision")]
     public float visionRange = 5f;
 
-    private int currentWaypointIndex = 0;
-    private Vector2 targetPosition;
-    private Vector2 homePosition;
-    private Rigidbody2D rb;
+    [Header("Behavior Timing")]
+    public float minActivityTime = 3f;
+    public float maxActivityTime = 12f;
+
+    [Tooltip("Intervalo (segundos) entre decisões no estado Idle")]
+    public float idleDecisionDelay = 1.5f;
+
+    [Header("Patrol (Hexagon only)")]
+    [Tooltip("Raio de patrulha em torno do posto — sem waypoints manuais")]
+    public float patrolRadius = 6f;
+
+    [Tooltip("Quantos pontos de patrulha gerar dinamicamente")]
+    [Range(2, 8)]
+    public int patrolPointCount = 4;
+
+    [Header("Allowed Rooms")]
+    public List<GameObject> allowedRooms;
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Runtime privado
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private NavMeshAgent    agent;
+    private HumanNavigation nav;
+
+    private Vector3         homePosition;
+    private InterestPoint   currentInterestPoint;
+
+    private float           stateTimer  = 0f;
+    private float           idleTimer   = 0f;
+    private bool            isDeciding  = false;
+
+    // Patrulha procedural — lista de pontos gerados em runtime
+    private List<Vector3>   patrolRoute = new List<Vector3>();
+    private int             patrolIndex = 0;
+
+    private Transform       playerTransform;
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Unity lifecycle
+    // ──────────────────────────────────────────────────────────────────────────
 
     void Start()
     {
-        rb = GetComponent<Rigidbody2D>();
-        SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
-        if (spriteRenderer != null && shapeData != null)
-        {
-            spriteRenderer.color = shapeData.color;
-        }
+        agent = GetComponent<NavMeshAgent>();
+        nav   = GetComponent<HumanNavigation>();
 
-        switch (shapeData.type)
-        {
-            case ShapeType.Square:
-                currentState = NPCState.Idle;
-                break;
+        agent.updateRotation = false;
+        agent.updateUpAxis   = false;
+        agent.speed          = shapeData.baseSpeed;
 
-            case ShapeType.Circle:
-                currentState = NPCState.Idle;
-                break;
+        SpriteRenderer sr = GetComponent<SpriteRenderer>();
+        if (sr != null && shapeData != null)
+            sr.color = shapeData.color;
 
-            case ShapeType.Triangle:
-                currentState = NPCState.Idle;
-                break;
+        homePosition = initialPosition != null
+            ? initialPosition.position
+            : transform.position;
 
-            case ShapeType.Hexagon:
-                currentState = NPCState.Idle;
-                break;
-        }
+        if (interestPoints == null || interestPoints.Length == 0)
+            interestPoints = FindObjectsByType<InterestPoint>(FindObjectsSortMode.None);
 
-        homePosition = initialPosition.position;
+        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+        if (playerObj != null)
+            playerTransform = playerObj.transform;
+
+        // Gera a rota de patrulha para os Hexagon
+        if (shapeData.type == ShapeType.Hexagon)
+            GeneratePatrolRoute();
+
+        // Stagger inicial para os NPCs não decidirem todos ao mesmo tempo
+        idleTimer = Random.Range(0f, idleDecisionDelay * 3f);
     }
 
     void Update()
     {
         switch (currentState)
         {
-            case NPCState.Idle:
-                HandleBehavior();
-                break;
-
-            case NPCState.Moving:
-                MoveToWaypoint();
-                CheckArrival();
-                break;
-
-            case NPCState.Chasing:
-                //ChasePlayer();
-                break;
-
-            case NPCState.Returning:
-                ReturnToInitialPosition();
-                break;
+            case NPCState.Idle:          UpdateIdle();          break;
+            case NPCState.Walking:       /* gerido por HumanNavigation + callback */ break;
+            case NPCState.Observing:
+            case NPCState.Drinking:
+            case NPCState.Socializing:
+            case NPCState.Resting:       UpdateTimedActivity(); break;
+            case NPCState.Patrolling:    UpdatePatrolling();    break;
+            case NPCState.Investigating: /* gerido por callback */               break;
+            case NPCState.Returning:     /* gerido por callback */               break;
         }
     }
 
-    void HandleBehavior()
+    // ──────────────────────────────────────────────────────────────────────────
+    // State handlers
+    // ──────────────────────────────────────────────────────────────────────────
+
+    void UpdateIdle()
     {
-        /*funcionamento dos npc
-        circle npc
-        apenas vão andar de um lado para o outro e podemos fazer com que eles se o player der muita cana esse npc pode ir alertar um segurança
-        hexagon security
-        vão estar maioritariamente parados nas entradas e saídas das salas a vigiar o ambiente e caso aconteça algo vai até ao local e depois volta a posição inicial
-        triangle vip
-        npc que tanto podem só andar de um lado para o outro como podem ser bem mais vigilantes que o npc normal e vão estar em zonas de acesso restrito
-        square worker
-        estes vão estar atrás de espécies de balcões estáticos a “atender” clientes e uma vez ou outra podem andar pelo mapa*/
-        float chance = Random.Range(0f, 100f);
+        idleTimer -= Time.deltaTime;
+        if (idleTimer <= 0f && !isDeciding)
+        {
+            isDeciding = true;
+            StartCoroutine(DecideNextBehavior());
+        }
+    }
+
+    void UpdateTimedActivity()
+    {
+        stateTimer -= Time.deltaTime;
+        if (stateTimer <= 0f)
+            FinishActivity();
+    }
+
+    /// <summary>
+    /// Patrulha procedural: percorre a lista de pontos gerados
+    /// com perfil Guard. Cada chegada agenda o próximo ponto.
+    /// </summary>
+    void UpdatePatrolling()
+    {
+        if (patrolRoute.Count == 0)
+        {
+            EnterIdle();
+            return;
+        }
+
+        // Só lança movimento se não estiver já em trânsito
+        if (!nav.IsMoving)
+        {
+            Vector3 nextPoint = patrolRoute[patrolIndex];
+            patrolIndex = (patrolIndex + 1) % patrolRoute.Count;
+
+            nav.StartJourney(nextPoint, HumanNavigation.MovementProfile.Guard, () =>
+            {
+                // Pequena pausa de sentinela antes de avançar
+                EnterIdle(Random.Range(1.5f, 4f));
+            });
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Decision coroutine
+    // ──────────────────────────────────────────────────────────────────────────
+
+    IEnumerator DecideNextBehavior()
+    {
+        yield return new WaitForSeconds(Random.Range(0.2f, idleDecisionDelay));
 
         switch (shapeData.type)
         {
-            case ShapeType.Circle:
-                if (waypoints.Length > 0)
-                {
-                    targetPosition = waypoints[currentWaypointIndex].position;
-                    currentWaypointIndex = (currentWaypointIndex + 1) % waypoints.Length;
-                }
-                else
-                {
-                    SetNewRandomWaipoint();
-                }
-                currentState = NPCState.Moving;
-                break;
-            case ShapeType.Hexagon:
-                if (chance < .5f)
-                {
-                    SetNewRandomWaipoint();
-                    currentState = NPCState.Moving;
-                }
-                break;
-            case ShapeType.Triangle:
-                SetNewRandomWaipoint();
-                currentState = NPCState.Moving;
-                break;
-            case ShapeType.Square:
-                if (chance < .02f)
-                {
-                    SetNewRandomWaipoint();
-                    currentState = NPCState.Moving;
-                }
-                break;
+            case ShapeType.Circle:   DecideCircle();   break;
+            case ShapeType.Hexagon:  DecideHexagon();  break;
+            case ShapeType.Triangle: DecideTriangle(); break;
+            case ShapeType.Square:   DecideSquare();   break;
         }
+
+        isDeciding = false;
     }
 
-    void CheckArrival()
+    // ── Circle (Convidado) ────────────────────────────────────────────────────
+    void DecideCircle()
     {
-        float dist = Vector2.Distance(transform.position, targetPosition);
+        float roll = Random.value;
 
-        if (dist < 0.2f)
+        if      (roll < 0.30f) TryGoToInterestPoint(InterestPoint.PointType.Painting,   HumanNavigation.MovementProfile.Casual);
+        else if (roll < 0.50f) TryGoToInterestPoint(InterestPoint.PointType.DrinkTable, HumanNavigation.MovementProfile.Casual);
+        else if (roll < 0.65f) TryGoToInterestPoint(InterestPoint.PointType.SocialArea, HumanNavigation.MovementProfile.Casual);
+        else if (roll < 0.80f) WalkToRandomNearby(5f, HumanNavigation.MovementProfile.Casual);
+        else                   EnterIdle(Random.Range(4f, 10f)); // fica a conversar
+    }
+
+    // ── Hexagon (Segurança) ───────────────────────────────────────────────────
+    void DecideHexagon()
+    {
+        // Segurança retoma sempre a patrulha
+        currentState = NPCState.Patrolling;
+    }
+
+    // ── Triangle (VIP) ────────────────────────────────────────────────────────
+    void DecideTriangle()
+    {
+        float roll = Random.value;
+
+        if      (roll < 0.35f)
         {
-            rb.linearVelocity = Vector2.zero;
-            if (shapeData.type == ShapeType.Hexagon || shapeData.type == ShapeType.Square)
-            {
-                currentState = NPCState.Returning;
-            }
+            if (!TryGoToInterestPoint(InterestPoint.PointType.PrivateRoom, HumanNavigation.MovementProfile.Purposeful))
+                TryGoToInterestPoint(InterestPoint.PointType.Seating, HumanNavigation.MovementProfile.Purposeful);
+        }
+        else if (roll < 0.55f) TryGoToInterestPoint(InterestPoint.PointType.SocialArea, HumanNavigation.MovementProfile.Purposeful);
+        else if (roll < 0.70f) TryGoToInterestPoint(InterestPoint.PointType.DrinkTable, HumanNavigation.MovementProfile.Purposeful);
+        else if (roll < 0.80f) TryGoToInterestPoint(InterestPoint.PointType.Painting,   HumanNavigation.MovementProfile.Purposeful);
+        else                   EnterIdle(Random.Range(8f, 20f)); // VIPs não se apressam
+    }
+
+    // ── Square (Staff) ────────────────────────────────────────────────────────
+    void DecideSquare()
+    {
+        float roll = Random.value;
+
+        if      (roll < 0.75f) EnterIdle(Random.Range(5f, 15f));
+        else if (roll < 0.90f) WalkToRandomNearby(3f, HumanNavigation.MovementProfile.Worker);
+        else                   TryGoToInterestPoint(InterestPoint.PointType.DrinkTable, HumanNavigation.MovementProfile.Worker);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Navigation helpers
+    // ──────────────────────────────────────────────────────────────────────────
+
+    bool TryGoToInterestPoint(InterestPoint.PointType type, HumanNavigation.MovementProfile profile)
+    {
+        List<InterestPoint> candidates = new List<InterestPoint>();
+        foreach (var pt in interestPoints)
+        {
+            if (pt.pointType != type)                                  continue;
+            if (pt.vipOnly && shapeData.type != ShapeType.Triangle)   continue;
+            if (!pt.IsAvailable())                                     continue;
+            candidates.Add(pt);
+        }
+
+        if (candidates.Count == 0) return false;
+
+        // Peso por distância — pontos mais perto têm mais probabilidade
+        // (evita que todos os NPCs vão sempre ao mesmo sítio)
+        InterestPoint chosen = PickWeightedByDistance(candidates);
+
+        ReleaseCurrentInterestPoint();
+        if (!chosen.Occupy()) return false;
+
+        currentInterestPoint = chosen;
+        currentState = NPCState.Walking;
+
+        nav.StartJourney(chosen.transform.position, profile, OnArrivedAtInterestPoint);
+        return true;
+    }
+
+    void WalkToRandomNearby(float radius, HumanNavigation.MovementProfile profile)
+    {
+        ReleaseCurrentInterestPoint();
+
+        Vector3 randomDir = Random.insideUnitCircle;
+        Vector3 offset    = new Vector3(randomDir.x, 0f, randomDir.y) * radius;
+        Vector3 candidate = transform.position + offset;
+
+        Vector3 dest = homePosition; // fallback
+        if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, radius, NavMesh.AllAreas))
+            dest = hit.position;
+
+        currentState = NPCState.Walking;
+        nav.StartJourney(dest, profile, () => EnterIdle());
+    }
+
+    void ReturnHome(System.Action onArrived = null)
+    {
+        ReleaseCurrentInterestPoint();
+        currentState = NPCState.Returning;
+
+        HumanNavigation.MovementProfile profile = shapeData.type == ShapeType.Hexagon
+            ? HumanNavigation.MovementProfile.Guard
+            : HumanNavigation.MovementProfile.Purposeful;
+
+        nav.StartJourney(homePosition, profile, () =>
+        {
+            onArrived?.Invoke();
+            if (shapeData.type == ShapeType.Hexagon)
+                currentState = NPCState.Patrolling;
             else
-            {
-                currentState = NPCState.Idle;
-            }
-        }
+                EnterIdle();
+        });
     }
 
-    void ReturnToInitialPosition()
-    {
-        Vector2 direction = (homePosition - (Vector2)transform.position).normalized;
-        rb.linearVelocity = direction * shapeData.baseSpeed;
+    // ──────────────────────────────────────────────────────────────────────────
+    // Arrival callback
+    // ──────────────────────────────────────────────────────────────────────────
 
-        if (Vector2.Distance(transform.position, homePosition) < 0.1f)
+    void OnArrivedAtInterestPoint()
+    {
+        if (currentInterestPoint == null) { EnterIdle(); return; }
+
+        // Rotação suave para o ponto de interesse
+        if (currentInterestPoint.facingDirection != Vector3.zero)
+            StartCoroutine(SmoothFace(currentInterestPoint.facingDirection));
+
+        NPCState activityState = currentInterestPoint.pointType switch
         {
-            rb.linearVelocity = Vector2.zero; // Para o boneco
-            currentState = NPCState.Idle;
+            InterestPoint.PointType.Painting    => NPCState.Observing,
+            InterestPoint.PointType.DrinkTable  => NPCState.Drinking,
+            InterestPoint.PointType.SocialArea  => NPCState.Socializing,
+            InterestPoint.PointType.Seating     => NPCState.Resting,
+            InterestPoint.PointType.PrivateRoom => NPCState.Resting,
+            _                                   => NPCState.Idle
+        };
+
+        float minT = minActivityTime;
+        float maxT = maxActivityTime;
+
+        if (shapeData.type == ShapeType.Triangle) { minT *= 2f; maxT *= 3f; }
+        if (shapeData.type == ShapeType.Hexagon)  { minT = 1f; maxT = 3f; }
+
+        stateTimer   = Random.Range(minT, maxT);
+        currentState = activityState;
+    }
+
+    void FinishActivity()
+    {
+        ReleaseCurrentInterestPoint();
+
+        bool returnToPost = shapeData.type == ShapeType.Hexagon
+                         || shapeData.type == ShapeType.Square;
+
+        if (returnToPost) ReturnHome();
+        else              EnterIdle();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Patrol generation — cria rota circular no NavMesh em torno do posto
+    // ──────────────────────────────────────────────────────────────────────────
+
+    void GeneratePatrolRoute()
+    {
+        patrolRoute.Clear();
+
+        for (int i = 0; i < patrolPointCount; i++)
+        {
+            // Distribui ângulos uniformemente + pequeno jitter
+            float angle     = (360f / patrolPointCount) * i + Random.Range(-15f, 15f);
+            float distance  = Random.Range(patrolRadius * 0.5f, patrolRadius);
+            float rad       = angle * Mathf.Deg2Rad;
+
+            Vector3 candidate = homePosition + new Vector3(
+                Mathf.Cos(rad) * distance,
+                0f,
+                Mathf.Sin(rad) * distance
+            );
+
+            if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, patrolRadius, NavMesh.AllAreas))
+                patrolRoute.Add(hit.position);
         }
+
+        // Se não conseguiu nenhum ponto, usa só a posição inicial
+        if (patrolRoute.Count == 0)
+            patrolRoute.Add(homePosition);
+
+        // Começa num ponto aleatório da rota (evita todos saírem do mesmo lado)
+        patrolIndex = Random.Range(0, patrolRoute.Count);
     }
 
-    void MoveToWaypoint()
+    // ──────────────────────────────────────────────────────────────────────────
+    // Public API
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Envia um Hexagon investigar uma posição. Pode ser chamado externamente.</summary>
+    public void InvestigatePosition(Vector3 position)
     {
-        Vector2 offset = targetPosition - (Vector2)transform.position;
-        Vector2 direction = offset.normalized;
-        rb.linearVelocity = direction * shapeData.baseSpeed;
+        if (shapeData.type != ShapeType.Hexagon) return;
+
+        nav.StopJourney();
+        ReleaseCurrentInterestPoint();
+        currentState = NPCState.Investigating;
+
+        nav.StartJourney(position, HumanNavigation.MovementProfile.Guard, () =>
+        {
+            // Após investigar, volta ao posto e retoma patrulha
+            ReturnHome();
+        });
     }
 
-    void SetNewRandomWaipoint()
+    /// <summary>Alerta genérico — delega para InvestigatePosition se for segurança.</summary>
+    public void Alert(Vector3 incidentPosition) => InvestigatePosition(incidentPosition);
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Helpers
+    // ──────────────────────────────────────────────────────────────────────────
+
+    void EnterIdle(float delay = -1f)
     {
-        targetPosition = homePosition + (Random.insideUnitCircle * 5f);
+        currentState = NPCState.Idle;
+        idleTimer    = delay > 0f ? delay : Random.Range(0.5f, idleDecisionDelay);
+        isDeciding   = false;
     }
+
+    void ReleaseCurrentInterestPoint()
+    {
+        currentInterestPoint?.Vacate();
+        currentInterestPoint = null;
+    }
+
+    /// <summary>Escolhe um InterestPoint com probabilidade inversamente proporcional à distância.</summary>
+    InterestPoint PickWeightedByDistance(List<InterestPoint> candidates)
+    {
+        float totalWeight = 0f;
+        float[] weights   = new float[candidates.Count];
+
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            float dist  = Vector3.Distance(transform.position, candidates[i].transform.position);
+            weights[i]  = 1f / (dist + 0.1f); // inverso da distância
+            totalWeight += weights[i];
+        }
+
+        float rand = Random.Range(0f, totalWeight);
+        float cumulative = 0f;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            cumulative += weights[i];
+            if (rand <= cumulative) return candidates[i];
+        }
+        return candidates[candidates.Count - 1];
+    }
+
+    IEnumerator SmoothFace(Vector3 direction)
+    {
+        float elapsed  = 0f;
+        float duration = 0.5f;
+        Quaternion from = transform.rotation;
+
+        // Em 2D a rotação é no eixo Z
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+        Quaternion to = Quaternion.Euler(0f, 0f, angle);
+
+        while (elapsed < duration)
+        {
+            transform.rotation = Quaternion.Slerp(from, to, elapsed / duration);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+        transform.rotation = to;
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Gizmos
+    // ──────────────────────────────────────────────────────────────────────────
 
     void OnDrawGizmos()
     {
-        // Desenha uma linha até ao destino atual (alvo)
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawLine(transform.position, targetPosition);
-
-        // Desenha uma esfera no ponto inicial (home)
+        // Posto / home
         Gizmos.color = Color.green;
-        Gizmos.DrawWireSphere(homePosition, 0.5f);
+        Gizmos.DrawWireSphere(homePosition, 0.4f);
 
-        // Desenha o alcance de visão
-        Gizmos.color = Color.red;
+        // Visão
+        Gizmos.color = new Color(1f, 0.2f, 0.2f, 0.15f);
         Gizmos.DrawWireSphere(transform.position, visionRange);
+
+        // Rota de patrulha (Hexagon)
+        if (patrolRoute != null && patrolRoute.Count > 1)
+        {
+            Gizmos.color = new Color(1f, 0.6f, 0f, 0.6f);
+            for (int i = 0; i < patrolRoute.Count; i++)
+            {
+                Vector3 a = patrolRoute[i];
+                Vector3 b = patrolRoute[(i + 1) % patrolRoute.Count];
+                Gizmos.DrawLine(a, b);
+                Gizmos.DrawWireSphere(a, 0.2f);
+            }
+        }
+
+        // Raio de patrulha
+        if (shapeData != null && shapeData.type == ShapeType.Hexagon)
+        {
+            Gizmos.color = new Color(1f, 0.6f, 0f, 0.1f);
+            Gizmos.DrawWireSphere(homePosition, patrolRadius);
+        }
+
+        // Label de estado
+        #if UNITY_EDITOR
+        UnityEditor.Handles.Label(
+            transform.position + Vector3.up * 1.4f,
+            $"{(shapeData != null ? shapeData.type.ToString() : "?")} [{currentState}]"
+        );
+        #endif
     }
 }

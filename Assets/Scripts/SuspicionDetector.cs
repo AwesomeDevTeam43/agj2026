@@ -172,16 +172,22 @@ public class SuspicionDetector : MonoBehaviour
         if (sv == null) return;
 
         ShapeType playerShape = sv.shapeData.type;
-        bool isSuspicious     = IsSuspicious(playerShape);
+        
+        bool isSuspiciousShape = IsSuspicious(playerShape);
+        bool isDoingSuspiciousAction = false;
+        
+        // Also check if running or loitering!
+        if (_playerRb != null && _playerRb.linearVelocity.magnitude > runSpeedThreshold) isDoingSuspiciousAction = true;
+        if (_loiterTimer >= loiteringTime) isDoingSuspiciousAction = true;
 
-        if (isSuspicious)
+        if (isSuspiciousShape || isDoingSuspiciousAction)
         {
             if (_raiseRoutine == null)
                 _raiseRoutine = StartCoroutine(RaiseSuspicionRoutine(playerCollider));
         }
         else
         {
-            // Shape permitido — para de aumentar se estava a aumentar
+            // Shape permitido e sem ação suspeita — para de aumentar se estava a aumentar
             if (_raiseRoutine != null)
             {
                 StopCoroutine(_raiseRoutine);
@@ -194,7 +200,14 @@ public class SuspicionDetector : MonoBehaviour
     bool IsSuspicious(ShapeType playerShape)
     {
         if (isRestrictedToAll) return true;
-        if (allowedShapes == null || allowedShapes.Length == 0) return false;
+        
+        // If they haven't set up the allowed shapes, let's warn them in case it's misconfigured
+        if (allowedShapes == null || allowedShapes.Length == 0)
+        {
+            if (showDebugLog) Debug.LogWarning($"[SuspicionDetector] {gameObject.name} has no allowedShapes! Everyone is allowed by default. Increase isRestrictedToAll if it's a restricted area.");
+            return false;
+        }
+
         return !System.Array.Exists(allowedShapes, s => s == playerShape);
     }
 
@@ -213,13 +226,18 @@ public class SuspicionDetector : MonoBehaviour
             if (showDebugLog)
                 Debug.Log($"[SuspicionDetector] {_guardNPC?.name}: suspicion={_currentSuspicion:F1} (x{multiplier:F2})");
 
-            // Reavalia shape a cada frame — se mudou de identidade para o shape
-            // correto, para de aumentar
+            // Reavalia context a cada frame — se mudou de identidade para o shape
+            // correto ou parou de correr, para de aumentar
             ShapeVisualizer sv = playerCollider.GetComponent<ShapeVisualizer>();
-            if (sv != null && !IsSuspicious(sv.shapeData.type))
+            bool stillSuspiciousShape = sv != null && IsSuspicious(sv.shapeData.type);
+            bool stillDoingAction = false;
+            if (_playerRb != null && _playerRb.linearVelocity.magnitude > runSpeedThreshold) stillDoingAction = true;
+            if (_loiterTimer >= loiteringTime) stillDoingAction = true;
+
+            if (!stillSuspiciousShape && !stillDoingAction)
             {
                 if (showDebugLog)
-                    Debug.Log($"[SuspicionDetector] Player mudou para shape permitido — a parar aumento");
+                    Debug.Log($"[SuspicionDetector] Player parou de ser suspeito — a parar aumento");
                 break;
             }
 
@@ -289,7 +307,71 @@ public class SuspicionDetector : MonoBehaviour
 
         ControllerNPC[] allGuards = FindObjectsByType<ControllerNPC>(FindObjectsSortMode.None);
         foreach (var guard in allGuards)
+        {
             guard.Alert(playerPos);
+        }
+
+        // Make suspicion truly impactful! Instant game over if they catch you doing something max level suspicious
+        Debug.Log("MAX SUSPICION REACHED! GAME OVER!");
+        UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+    }
+
+    private static Texture2D _bgTexture;
+    private static Texture2D _fillTexture;
+
+    void OnGUI()
+    {
+        if (Event.current.type != EventType.Repaint) return;
+
+        if (_currentSuspicion > 0.1f && _guardNPC != null)
+        {
+            Vector3 screenPos = Camera.main.WorldToScreenPoint(_guardNPC.transform.position + Vector3.up * 1.5f);
+            
+            // Only draw if the guard is on screen (z > 0 in WorldToScreenPoint)
+            if (screenPos.z > 0)
+            {
+                screenPos.y = Screen.height - screenPos.y; // Flip Y for GUI
+                
+                float width = 80f;
+                float height = 15f;
+                Rect bgRect = new Rect(screenPos.x - width / 2, screenPos.y - height, width, height);
+                Rect fillRect = new Rect(bgRect.x, bgRect.y, width * SuspicionNormalized, height);
+
+                // Draw solid background
+                if (_bgTexture == null)
+                {
+                    _bgTexture = new Texture2D(1, 1);
+                    _bgTexture.SetPixel(0, 0, new Color(0.1f, 0.1f, 0.1f, 0.8f));
+                    _bgTexture.Apply();
+                }
+                GUI.DrawTexture(bgRect, _bgTexture);
+
+                // Draw filled bar based on suspicion
+                Color barColor = Color.Lerp(Color.yellow, Color.red, SuspicionNormalized);
+                if (_fillTexture == null)
+                {
+                    _fillTexture = new Texture2D(1, 1);
+                }
+                _fillTexture.SetPixel(0, 0, barColor);
+                _fillTexture.Apply();
+                GUI.DrawTexture(fillRect, _fillTexture);
+
+                // Draw text
+                GUIStyle style = new GUIStyle(GUI.skin.label);
+                style.alignment = TextAnchor.MiddleCenter;
+                style.fontSize = 12;
+                style.fontStyle = FontStyle.Bold;
+                style.normal.textColor = Color.white;
+                
+                // Add a small drop shadow for the text
+                Rect shadowRect = new Rect(bgRect.x + 1, bgRect.y + 1, bgRect.width, bgRect.height);
+                GUIStyle shadowStyle = new GUIStyle(style);
+                shadowStyle.normal.textColor = Color.black;
+                GUI.Label(shadowRect, "Suspicion", shadowStyle);
+                
+                GUI.Label(bgRect, "Suspicion", style);
+            }
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────

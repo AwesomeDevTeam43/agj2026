@@ -34,7 +34,8 @@ public class ControllerNPC : MonoBehaviour
         Patrolling,     // Segurança: a gerar rondas na área
         Watching,       // Guarda estático: look-around no posto
         Investigating,  // Segurança: a ir a um incidente
-        Returning       // A regressar ao posto
+        Returning,      // A regressar ao posto
+        CallingGuard    // Trabalhador: em pânico a correr para chamar um segurança
     }
 
     public NPCState currentState = NPCState.Idle;
@@ -142,10 +143,28 @@ public class ControllerNPC : MonoBehaviour
         idleTimer = Random.Range(0f, idleDecisionDelay * 3f);
     }
 
+    float bodyCheckTimer = 0f;
+
     void Update()
     {
+        if (nav == null || shapeData == null) return;
+
+        if (shapeData.type != ShapeType.Husk)
+        {
+            if (currentState != NPCState.CallingGuard && currentState != NPCState.Investigating)
+            {
+                bodyCheckTimer -= Time.deltaTime;
+                if (bodyCheckTimer <= 0f)
+                {
+                    bodyCheckTimer = 0.5f;
+                    CheckForDeadBodies();
+                }
+            }
+        }
+
         switch (currentState)
         {
+            case NPCState.CallingGuard:  /* gerido por callback */ break;
             case NPCState.Idle:          UpdateIdle();          break;
             case NPCState.Walking:       /* gerido por HumanNavigation + callback */ break;
             case NPCState.Observing:
@@ -154,8 +173,94 @@ public class ControllerNPC : MonoBehaviour
             case NPCState.Resting:       UpdateTimedActivity(); break;
             case NPCState.Patrolling:    UpdatePatrolling();    break;
             case NPCState.Watching:      UpdateWatching();      break;
-            case NPCState.Investigating: /* gerido por callback */               break;
+            case NPCState.Investigating: UpdateInvestigating(); break;
             case NPCState.Returning:     /* gerido por callback */               break;
+        }
+    }
+
+    void UpdateInvestigating()
+    {
+        // Impactful: If investigating and close to player, catch them
+        if (shapeData.type == ShapeType.Hexagon)
+        {
+            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+            if (playerObj != null)
+            {
+                float distToPlayer = Vector2.Distance(transform.position, playerObj.transform.position);
+                if (distToPlayer < 1.5f)
+                {
+                    Debug.Log("Guard caught the player!");
+                    UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+                }
+            }
+        }
+    }
+
+    void CheckForDeadBodies()
+    {
+        Collider2D[] hitColliders = Physics2D.OverlapCircleAll(transform.position, visionRange);
+        foreach (var hitCollider in hitColliders)
+        {
+            var sv = hitCollider.GetComponent<ShapeVisualizer>();
+            if (sv != null && sv.shapeData != null && sv.shapeData.type == ShapeType.Husk)
+            {
+                PanicAndFindGuard(hitCollider.transform.position);
+                break;
+            }
+        }
+    }
+
+    void PanicAndFindGuard(Vector3 bodyTarget)
+    {
+        Debug.Log($"[NPC] {gameObject.name} ({shapeData.type}) viu um corpo (Husk)!");
+
+        // Se for um guarda, dispara o alarme geral imediatamente
+        if (shapeData.type == ShapeType.Hexagon)
+        {
+            var suspicion = GetComponentInChildren<SuspicionDetector>();
+            if (suspicion != null)
+            {
+                suspicion.RaiseGlobalAlarm();
+            }
+            InvestigatePosition(bodyTarget);
+            return;
+        }
+
+        if (nav != null) nav.StopJourney();
+        ReleaseCurrentInterestPoint();
+        currentState = NPCState.CallingGuard;
+        
+        ControllerNPC nearestGuard = null;
+        float minDistance = float.MaxValue;
+        
+        var allNPCs = FindObjectsByType<ControllerNPC>(FindObjectsSortMode.None);
+        foreach (var npc in allNPCs)
+        {
+            if (npc.shapeData != null && npc.shapeData.type == ShapeType.Hexagon)
+            {
+                float dist = Vector2.Distance(transform.position, npc.transform.position);
+                if (dist < minDistance)
+                {
+                    minDistance = dist;
+                    nearestGuard = npc;
+                }
+            }
+        }
+
+        if (nearestGuard != null && nav != null)
+        {
+            // Foge para o guarda a pedir ajuda
+            nav.StartJourney(nearestGuard.transform.position, HumanNavigation.MovementProfile.Urgent, () =>
+            {
+                Debug.Log($"[NPC] {gameObject.name} alertou o guarda {nearestGuard.name}!");
+                nearestGuard.InvestigatePosition(bodyTarget);
+                EnterIdle(3f); // Pausa depois de alertar antes de voltar ao normal
+            });
+        }
+        else
+        {
+            // Não há guardas, então fica apenas em pânico no sítio
+            EnterIdle(3f);
         }
     }
 
@@ -294,8 +399,8 @@ public class ControllerNPC : MonoBehaviour
     {
         float roll = Random.value;
 
-        if      (roll < 0.75f) EnterIdle(Random.Range(5f, 15f));
-        else if (roll < 0.90f) WalkToRandomNearby(3f, HumanNavigation.MovementProfile.Worker);
+        if      (roll < 0.30f) EnterIdle(Random.Range(2f, 5f)); // Menos tempo parado
+        else if (roll < 0.70f) WalkToRandomNearby(6f, HumanNavigation.MovementProfile.Worker); // Mais movimento
         else                   TryGoToInterestPoint(InterestPoint.PointType.DrinkTable, HumanNavigation.MovementProfile.Worker);
     }
 
@@ -326,7 +431,15 @@ public class ControllerNPC : MonoBehaviour
         currentInterestPoint = chosen;
         currentState = NPCState.Walking;
 
-        nav.StartJourney(chosen.transform.position, profile, OnArrivedAtInterestPoint);
+        Vector3 destination = chosen.transform.position;
+        if (chosen.maxOccupants > 1)
+        {
+            // Adicionar um pequeno desvio para que não se sobreponham no mesmo Vector3
+            Vector2 offset = Random.insideUnitCircle * 0.8f;
+            destination += new Vector3(offset.x, offset.y, 0f);
+        }
+
+        nav.StartJourney(destination, profile, OnArrivedAtInterestPoint);
         return true;
     }
 
@@ -508,27 +621,12 @@ public class ControllerNPC : MonoBehaviour
         currentInterestPoint = null;
     }
 
-    /// <summary>Escolhe um InterestPoint com probabilidade inversamente proporcional à distância.</summary>
+    /// <summary>Escolhe um InterestPoint aleatoriamente para evitar que se juntem todos no mesmo lado.</summary>
     InterestPoint PickWeightedByDistance(List<InterestPoint> candidates)
     {
-        float totalWeight = 0f;
-        float[] weights   = new float[candidates.Count];
-
-        for (int i = 0; i < candidates.Count; i++)
-        {
-            float dist  = Vector3.Distance(transform.position, candidates[i].transform.position);
-            weights[i]  = 1f / (dist + 0.1f); // inverso da distância
-            totalWeight += weights[i];
-        }
-
-        float rand = Random.Range(0f, totalWeight);
-        float cumulative = 0f;
-        for (int i = 0; i < candidates.Count; i++)
-        {
-            cumulative += weights[i];
-            if (rand <= cumulative) return candidates[i];
-        }
-        return candidates[candidates.Count - 1];
+        // Alterado de "peso por distância" para puramente aleatório para evitar a formação de "aglomerados" artificiais
+        if (candidates == null || candidates.Count == 0) return null;
+        return candidates[Random.Range(0, candidates.Count)];
     }
 
     IEnumerator SmoothFace(Vector3 direction)

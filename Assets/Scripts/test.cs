@@ -267,6 +267,10 @@ public class Test : MonoBehaviour, IInteractable
             gameObject.tag = "Draggable";
             _isStealing = false;
 
+            // Disable NPC logic so it stops moving
+            var controller = GetComponent<ControllerNPC>();
+            if (controller != null) controller.enabled = false;
+
             if (killHistory.Count >= killThreshold)
             {
                 Debug.Log("Kill threshold exceeded, maxing out suspicion!");

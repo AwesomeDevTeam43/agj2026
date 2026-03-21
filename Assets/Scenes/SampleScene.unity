@@ -611,6 +611,8 @@ MonoBehaviour:
   maxStealDistance: 3.4
   highSuspicionOnStealRange: 2
   line: {fileID: 0}
+  stealCoyoteTime: 1
+  coyoteBlinkSpeed: 10
   killThreshold: 3
   killWindow: 10
 --- !u!60 &1752813310
@@ -1064,6 +1066,67 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 555c7fac1d88e0401a6a94b97fdf722a, type: 3}
+--- !u!1001 &9176031554177247763
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 789458848904731100, guid: e5c88762403a2ca498dd22b616bc68c8, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -5.773
+      objectReference: {fileID: 0}
+    - target: {fileID: 789458848904731100, guid: e5c88762403a2ca498dd22b616bc68c8, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 1.57
+      objectReference: {fileID: 0}
+    - target: {fileID: 789458848904731100, guid: e5c88762403a2ca498dd22b616bc68c8, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 789458848904731100, guid: e5c88762403a2ca498dd22b616bc68c8, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 789458848904731100, guid: e5c88762403a2ca498dd22b616bc68c8, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 789458848904731100, guid: e5c88762403a2ca498dd22b616bc68c8, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 789458848904731100, guid: e5c88762403a2ca498dd22b616bc68c8, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 789458848904731100, guid: e5c88762403a2ca498dd22b616bc68c8, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 789458848904731100, guid: e5c88762403a2ca498dd22b616bc68c8, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 789458848904731100, guid: e5c88762403a2ca498dd22b616bc68c8, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 949109820024297131, guid: e5c88762403a2ca498dd22b616bc68c8, type: 3}
+      propertyPath: m_Name
+      value: EletricPanel
+      objectReference: {fileID: 0}
+    - target: {fileID: 5438101580204256153, guid: e5c88762403a2ca498dd22b616bc68c8, type: 3}
+      propertyPath: playerController
+      value: 
+      objectReference: {fileID: 342182565}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: e5c88762403a2ca498dd22b616bc68c8, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -1075,3 +1138,4 @@ SceneRoots:
   - {fileID: 1752813316}
   - {fileID: 1960011900}
   - {fileID: 365373660}
+  - {fileID: 9176031554177247763}

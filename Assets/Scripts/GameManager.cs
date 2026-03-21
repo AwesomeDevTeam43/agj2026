@@ -9,6 +9,14 @@ public class GameManager : MonoBehaviour
     [SerializeField] private GameObject _winScreen;
     [SerializeField] private GameObject _loseScreen;
 
+    [Header("Game Object References")]
+    private bool staffRoomTreasure = false;
+    private bool vipRoomTreasure = false;
+    private bool officeRoomTreasure = false;
+    
+    private string checkBox = "\udb83\udc52";
+    private string uncheckBox = "\udb83\udc52";
+
     private bool _isGameOver = false;
 
     private void Awake()
@@ -20,7 +28,6 @@ public class GameManager : MonoBehaviour
         }
         Instance = this;
         DontDestroyOnLoad(gameObject);
-
     }
 
     private void Start()
@@ -44,6 +51,30 @@ public class GameManager : MonoBehaviour
     public void RestartLevel()
     {
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    public void CollectTreasure(Teasure.RoomLocale locale)
+    {
+        switch (locale)
+        {
+            case Teasure.RoomLocale.StaffRoom: 
+                staffRoomTreasure = true; 
+                break;
+            case Teasure.RoomLocale.VipRoom: 
+                vipRoomTreasure = true; 
+                break;
+            case Teasure.RoomLocale.OfficeRoom: 
+                officeRoomTreasure = true; 
+                break;
+        }
+
+        Debug.Log($"Collected {locale} treasure! Progress: Staff={staffRoomTreasure}, VIP={vipRoomTreasure}, Office={officeRoomTreasure}");
+
+        // Check if all three have been collected
+        if (staffRoomTreasure && vipRoomTreasure && officeRoomTreasure)
+        {
+            TriggerWin();
+        }
     }
 
     public void TriggerGameOver()

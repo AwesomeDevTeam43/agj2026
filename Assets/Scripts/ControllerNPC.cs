@@ -472,6 +472,25 @@ public class ControllerNPC : MonoBehaviour
     /// <summary>Alerta genérico — delega para InvestigatePosition se for segurança.</summary>
     public void Alert(Vector3 incidentPosition) => InvestigatePosition(incidentPosition);
 
+    /// <summary>Forces this NPC to go to a specific position and perform an action.</summary>
+    public void GoDoTask(Vector3 position, System.Action onArrived)
+    {
+        nav.StopJourney();
+        ReleaseCurrentInterestPoint();
+        currentState = NPCState.Walking;
+
+        nav.StartJourney(position, HumanNavigation.MovementProfile.Worker, () =>
+        {
+            onArrived?.Invoke();
+        });
+    }
+
+    /// <summary>Resumes normal behavior after a task.</summary>
+    public void ResumeNormalBehavior()
+    {
+        ReturnHome();
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────────────────────────────────

@@ -16,6 +16,8 @@ public class Test : MonoBehaviour, IInteractable
     [SerializeField] private float highSuspicionOnStealRange = 1.5f;
     private Coroutine _closeSuspicionRoutine;
 
+    [SerializeField] private LineRenderer line;
+
     private Queue<float> killHistory = new Queue<float>();
 
 
@@ -30,6 +32,15 @@ public class Test : MonoBehaviour, IInteractable
     {
         shapeVisualizer = GetComponent<ShapeVisualizer>();
         suspicionDetector = GetComponentInParent<SuspicionDetector>();
+        line = GetComponent<LineRenderer>();
+
+        if (line != null)
+        {
+            line.widthCurve = new AnimationCurve(new Keyframe(0, 0.05f), new Keyframe(1, 0.05f));
+            line.positionCount = 2;
+            line.useWorldSpace = true;
+            line.enabled = false;
+        }
     }
 
     void Start()
@@ -39,12 +50,7 @@ public class Test : MonoBehaviour, IInteractable
             shapeVisualizer.ApplyShape(shapeData);
         }
     }
-    //when clicked, steals NPC's shape and applies to player
-    //currently leaving them as empty husks but its instantaneous
 
-    //todo: implementing a goldilocks zone where the player has to remain close while 
-    // it transfers the shape, staying too close alerts and raises suspicion
-    // get too far and you lose it and risk getting caught trying to steal it again
     public void OnClick()
     {
         if (shapeData == null)
@@ -72,12 +78,8 @@ public class Test : MonoBehaviour, IInteractable
 
     void Update()
     {
-        /*f (_isStealing && !IsWithinGoldilocksZone())
-        {
-            Debug.Log("move out of rande");
-            CancelSteal();
-        }*/
         Steal();
+        UpdateStealLine();
     }
 
     void Steal()
@@ -136,6 +138,29 @@ public class Test : MonoBehaviour, IInteractable
             _closeSuspicionRoutine = null;
         }
         _isStealing = false;
+        if (line != null) line.enabled = false;
+    }
+
+
+    private void UpdateStealLine()
+    {
+        if (line == null) return;
+
+        if (!_isStealing || playerController == null)
+        {
+            line.enabled = false;
+            return;
+        }
+
+        Vector3 a = playerController.transform.position;
+        Vector3 b = transform.position;
+
+        a.z = -0.1f;
+        b.z = -0.1f;
+
+        line.enabled = true;
+        line.SetPosition(0, a);
+        line.SetPosition(1, b);
     }
 
     IEnumerator CommenceSteal()

@@ -203,6 +203,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   shapeData: {fileID: 0}
   moveSpeed: 5
+  acceleration: 1
+  deceleration: 15
+  rotationSmoothTime: 0.12
+  maxTurnSpeed: 720
 --- !u!114 &342182560
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -376,6 +380,7 @@ GameObject:
   - component: {fileID: 519420031}
   - component: {fileID: 519420029}
   - component: {fileID: 519420030}
+  - component: {fileID: 519420033}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -494,13 +499,28 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 519420028}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &519420033
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 519420028}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: efa5bc7d44ee29246b839c0e1b59fcca, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  player: {fileID: 342182562}
+  smoothSpeed: 0.125
+  offset: {x: 0, y: 0, z: -10}
 --- !u!1 &619394800
 GameObject:
   m_ObjectHideFlags: 0
@@ -783,9 +803,9 @@ MonoBehaviour:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 519420032}
   - {fileID: 221556060}
   - {fileID: 619394802}
+  - {fileID: 519420032}
   - {fileID: 342182562}
   - {fileID: 1960011900}
   - {fileID: 1203043968}

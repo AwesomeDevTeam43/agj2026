@@ -29,7 +29,5 @@ public class DistractionThrow : MonoBehaviour
         mouseWorldPos.z = 0;
         Instantiate(_distractionPrefab, mouseWorldPos, Quaternion.identity);
         AudioManager.Instance.Play("Coin");
-
-
     }
 }

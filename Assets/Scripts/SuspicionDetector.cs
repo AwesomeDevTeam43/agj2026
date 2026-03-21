@@ -41,6 +41,12 @@ public class SuspicionDetector : MonoBehaviour
         }
     }
 
+    public void RaiseGlobalAlarm()
+    {
+        _currentSuspicion = MAX_SUSPICION;
+        Debug.Log("Global alarm raised! Suspicion maxed out!");
+    }
+
     public IEnumerator RaiseSuspicion()
     {
         while (_currentSuspicion < MAX_SUSPICION)

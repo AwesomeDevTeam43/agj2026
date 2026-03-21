@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -14,6 +15,15 @@ public class Test : MonoBehaviour, IInteractable
     [SerializeField] private float minStealDistance = 0.8f;
     [SerializeField] private float maxStealDistance = 3f;
 
+    private Queue<float> killHistory = new Queue<float>();
+
+
+    [Header("Kill Overload Settings")]
+    [Tooltip("How many kills can be committed within the time window before suspicion is maxed?")]
+    [SerializeField] private int killThreshold = 3;
+    [SerializeField] private float killWindow = 10f;
+
+    public static bool GlobalArmActive = false;
 
     void Awake()
     {
@@ -65,6 +75,10 @@ public class Test : MonoBehaviour, IInteractable
             Debug.Log("move out of rande");
             CancelSteal();
         }
+        while (killHistory.Count > 0 && Time.time - killHistory.Peek() > killWindow)
+        {
+            killHistory.Dequeue();
+        }
     }
 
     //too close, raise suspicion. too far, cancel stealing process and reset to husk
@@ -97,10 +111,19 @@ public class Test : MonoBehaviour, IInteractable
             yield break;
         }
         shapeVisualizer.ApplyShape(shapeData);
+        killHistory.Enqueue(Time.time);
         //set tag to Draggable
         gameObject.tag = "Draggable";
         _isStealing = false;
+
+        if (killHistory.Count >= killThreshold)
+        {
+            Debug.Log("Kill threshold exceeded, maxing out suspicion!");
+            suspicionDetector.RaiseGlobalAlarm();
+        }
     }
+
+
 
     private void OnDrawGizmos()
     {

@@ -20,10 +20,10 @@ public class LockedDoor : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        if (other.CompareTag("Player"))
+        if (other.TryGetComponent<ShapeVisualizer>(out var playerShape))
         {
-            ShapeVisualizer playerShape = other.GetComponent<ShapeVisualizer>();
-            if (playerShape != null && playerShape.shapeData != null && playerShape.shapeData.type == allowedShape)
+            Debug.Log($"{playerShape.gameObject.name} entered door trigger.");
+            if (playerShape.shapeData != null && playerShape.shapeData.type == allowedShape)
             {
                 _authorizedEntries++;
                 OpenDoor();
@@ -32,9 +32,8 @@ public class LockedDoor : MonoBehaviour
     }
     private void OnTriggerExit2D(Collider2D other)
     {
-        if (other.CompareTag("Player"))
+        if (other.TryGetComponent<ShapeVisualizer>(out var playerShape))
         {
-            ShapeVisualizer playerShape = other.GetComponent<ShapeVisualizer>();
             if (playerShape != null && playerShape.shapeData != null && playerShape.shapeData.type == allowedShape)
             {
                 _authorizedEntries = Mathf.Max(0, _authorizedEntries - 1);
@@ -59,4 +58,5 @@ public class LockedDoor : MonoBehaviour
         Color tempColor = _doorRenderer.color;
         _doorRenderer.color = new Color(tempColor.r, tempColor.g, tempColor.b, 1f);
     }
-}
+
+  }

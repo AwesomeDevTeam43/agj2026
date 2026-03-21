@@ -1,4 +1,3 @@
-using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 
 public class PlayerController : MonoBehaviour
@@ -6,7 +5,7 @@ public class PlayerController : MonoBehaviour
     private Rigidbody2D rb;
     private InputHandler input;
 
-    [SerializeField] private Shape_Data shapeData;
+    [SerializeField] private ShapeData shapeData;
     [SerializeField] private float moveSpeed = 20f;
 
     void Start()

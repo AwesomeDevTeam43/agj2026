@@ -33,7 +33,7 @@ public class StealthCam : MonoBehaviour
         float clampedDistance = Mathf.Clamp(directionToMouse.magnitude, 0, maxPeekDistance);
 
         Vector3 idealPosition = player.position + directionToMouse.normalized * clampedDistance;
-        if (Input.GetKeyDown(KeyCode.LeftShift))
+        if (Input.GetKey(KeyCode.LeftShift))
         {
         transform.position = Vector3.Lerp(transform.position, idealPosition, moveSpeed * Time.deltaTime);
         }

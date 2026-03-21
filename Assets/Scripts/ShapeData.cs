@@ -2,8 +2,8 @@ using UnityEngine;
 
 public enum ShapeType
 {
-  Cube,           // green
-  Sphere,         // red
+  Square,           // green
+  Circle,         // red
   Triangle,       // orange
   Hexagon         // blue
 }

@@ -18,10 +18,11 @@ public class SuspicionDetector : MonoBehaviour
     private float _currentSuspicion = 0f;
     private const float MAX_SUSPICION = 100f;
     private Coroutine _reduceRoutine;
+    private Coroutine _raiseRoutine;
 
     void Awake()
     {
-        
+        _raiseRoutine = null;
          visionCone = GetComponent<PolygonCollider2D>();
     }
     //suspicioun reducement coroutine
@@ -40,6 +41,17 @@ public class SuspicionDetector : MonoBehaviour
         }
     }
 
+    public IEnumerator RaiseSuspicion()
+    {
+        while (_currentSuspicion < MAX_SUSPICION)
+        {
+            _currentSuspicion += suspicionIncreaseRate * Time.deltaTime;
+            _currentSuspicion = Mathf.Clamp(_currentSuspicion, 0f, MAX_SUSPICION);
+            Debug.Log($"Suspicion increased: {_currentSuspicion}");
+            yield return null;
+        }
+    }
+
     void OnTriggerExit2D(Collider2D other)
     {
         if (other.CompareTag("Player"))
@@ -47,6 +59,11 @@ public class SuspicionDetector : MonoBehaviour
             Debug.Log("Player left detection area, resetting suspicion.");
 
             _reduceRoutine = StartCoroutine(ReduceSuspicion());
+            if (_raiseRoutine != null)
+            {
+                StopCoroutine(_raiseRoutine);
+                _raiseRoutine = null;
+            }
         }
 
     }
@@ -57,30 +74,35 @@ public class SuspicionDetector : MonoBehaviour
             Debug.Log("Player entered detection area, evaluating shape.");
             StopCoroutine(_reduceRoutine);
         }
+
+        ShapeVisualizer shapeVisualizer = other.GetComponent<ShapeVisualizer>();
+        if (shapeVisualizer != null)
+        {
+            ShapeType currentShape = shapeVisualizer.shapeData.type;
+            bool isAllowed = isRestrictedToAll ? false : System.Array.Exists(allowedShapes, shape => shape == currentShape);
+
+            if (!isAllowed)
+            {
+                if (_raiseRoutine == null)
+                {
+                    _raiseRoutine = StartCoroutine(RaiseSuspicion());
+                }
+            }
+            else
+            {
+                if (_raiseRoutine != null)
+                {
+                    StopCoroutine(_raiseRoutine);
+                    _raiseRoutine = null;
+                    _reduceRoutine = StartCoroutine(ReduceSuspicion());
+                }
+            }
+        }
     }
     void OnTriggerStay2D(Collider2D other)
     {
         if (other.CompareTag("Player"))
         {
-            ShapeVisualizer shapeVisualizer = other.GetComponent<ShapeVisualizer>();
-            if (shapeVisualizer != null)
-            {
-                ShapeType currentShape = shapeVisualizer.shapeData.type;
-                bool isAllowed = isRestrictedToAll ? false : System.Array.Exists(allowedShapes, shape => shape == currentShape);
-
-                if (!isAllowed)
-                {
-                    _currentSuspicion += suspicionIncreaseRate * Time.deltaTime;
-                    _currentSuspicion = Mathf.Clamp(_currentSuspicion, 0f, MAX_SUSPICION);
-                    Debug.Log($"Suspicion increased: {_currentSuspicion}");
-                }
-                else
-                {
-                    _currentSuspicion -= suspicionDecreaseRate * Time.deltaTime;
-                    _currentSuspicion = Mathf.Clamp(_currentSuspicion, 0f, MAX_SUSPICION);
-                    Debug.Log($"Suspicion decreased: {_currentSuspicion}");
-                }
-            }
         }
     }
 

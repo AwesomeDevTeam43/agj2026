@@ -5,7 +5,8 @@ public enum ShapeType
   Square,           // green
   Circle,         // red
   Triangle,       // orange
-  Hexagon         // blue
+  Hexagon,    // blue
+  Husk     
 }
 
 [CreateAssetMenu(fileName = "Shape_Data", menuName = "Shapes/Shape_Data", order = 0)]

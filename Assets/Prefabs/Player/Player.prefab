@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: 6072826448921314864}
   - component: {fileID: 9113002827096588031}
   - component: {fileID: 3893478500085532198}
+  - component: {fileID: 5384184535860197945}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -321,6 +322,20 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   dragRadius: 2
   _dragPoint: {fileID: 1436564391445958366}
+--- !u!114 &5384184535860197945
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8015121173237377104}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee8bff979c8b973b18d47d0c44133aad, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _distractionPrefab: {fileID: 931467368738728350, guid: 2c567315e828e9af8b2243b042d9fa8e, type: 3}
+  _throwCooldown: 5
 --- !u!1 &8903830884826879368
 GameObject:
   m_ObjectHideFlags: 0

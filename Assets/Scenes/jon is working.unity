@@ -1059,6 +1059,7 @@ GameObject:
   - component: {fileID: 1203043970}
   - component: {fileID: 1203043972}
   - component: {fileID: 1203043971}
+  - component: {fileID: 1203043973}
   m_Layer: 6
   m_Name: Square
   m_TagString: Enemy
@@ -1211,11 +1212,25 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1203043966}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: aa1a72c6a6323324e84d198fdc774801, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &1203043973
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1203043966}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1e3edf8752df2ad418ca9a868456c54f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playerController: {fileID: 0}
+  shapeData: {fileID: 0}
 --- !u!1 &1704360613
 GameObject:
   m_ObjectHideFlags: 0

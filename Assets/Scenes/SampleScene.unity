@@ -878,6 +878,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   playerController: {fileID: 342182565}
   shapeData: {fileID: 11400000, guid: de0257a5adc4b72bb9365efba655c460, type: 2}
+  minStealDistance: 0.8
+  maxStealDistance: 3.6
 --- !u!60 &1752813310
 PolygonCollider2D:
   m_ObjectHideFlags: 0

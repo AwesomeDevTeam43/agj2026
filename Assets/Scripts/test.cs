@@ -1,4 +1,5 @@
 using System.Collections;
+using NUnit.Framework;
 using UnityEngine;
 
 public class Test : MonoBehaviour, IInteractable
@@ -6,7 +7,13 @@ public class Test : MonoBehaviour, IInteractable
     [SerializeField] private ShapeVisualizer playerController;
     private ShapeVisualizer shapeVisualizer;
     [SerializeField] private ShapeData shapeData;
-    private IEnumerator _stealCoroutine;
+    private Coroutine _stealCoroutine;
+    private bool _isStealing = false;
+
+    [SerializeField] private float minStealDistance = 0.8f;
+    [SerializeField] private float maxStealDistance = 3f;
+
+
     void Awake()
     {
         shapeVisualizer = GetComponent<ShapeVisualizer>();
@@ -18,7 +25,6 @@ public class Test : MonoBehaviour, IInteractable
         {
             shapeVisualizer.ApplyShape(shapeData);
         }
-        _stealCoroutine = CommenceSteal();
     }
     //when clicked, steals NPC's shape and applies to player
     //currently leaving them as empty husks but its instantaneous
@@ -33,35 +39,50 @@ public class Test : MonoBehaviour, IInteractable
             Debug.LogWarning("No Shape Data assigned to Test interactable");
             return;
         }
-        else if (shapeData.type != ShapeType.Husk)
+        if (_isStealing)
         {
-            //goldilock zone
-            if (!IsWithinGoldilocksZone())
-            {
-                StopCoroutine(_stealCoroutine);
-                Debug.Log("Not within goldilocks zone, cannot steal shape");
-                return;
-            }
-            else
-            {
-                Debug.Log("Within goldilocks zone, commencing steal");
-                StartCoroutine(CommenceSteal());
-            }
+            Debug.Log("is stealing right now");
+            return; 
+        }
+        if (IsWithinGoldilocksZone())
+        {
+            Debug.Log("start stealing");
+            _isStealing = true;
+            _stealCoroutine = StartCoroutine(CommenceSteal());
         }
         else
         {
-            Debug.LogWarning("Husk shape type is not interactable");
+            Debug.Log("not in steal range");
+            return;
         }
-        
+    }
+
+    void Update()
+    {
+        if (_isStealing && !IsWithinGoldilocksZone())
+        {
+            Debug.Log("move out of rande");
+            CancelSteal();
+        }
     }
 
     //too close, raise suspicion. too far, cancel stealing process and reset to husk
     private bool IsWithinGoldilocksZone()
     {
         float distance = Vector2.Distance(playerController.transform.position, transform.position);
-        return distance > 1f && distance < 3f; // Example thresholds for goldilocks zone
+        return distance > minStealDistance && distance < maxStealDistance; 
         
     }
+
+    private void CancelSteal()
+{
+    if (_stealCoroutine != null)
+    {
+        StopCoroutine(_stealCoroutine);
+        _stealCoroutine = null;
+    }
+    _isStealing = false;
+}
 
     IEnumerator CommenceSteal()
     {
@@ -77,5 +98,12 @@ public class Test : MonoBehaviour, IInteractable
         shapeVisualizer.ApplyShape(shapeData);
         //set tag to Draggable
         gameObject.tag = "Draggable";
+        _isStealing = false;
+    }
+
+    private void OnDrawGizmos()
+    {
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, maxStealDistance);
     }
 }

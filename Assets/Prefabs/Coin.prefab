@@ -100,4 +100,4 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _lifetime: 3
-  _distractionRadius: 0
+  _distractionRadius: 5

@@ -49,6 +49,7 @@ GameObject:
   - component: {fileID: 7028535624047453758}
   - component: {fileID: 8426463258069594751}
   - component: {fileID: 2979152878869067713}
+  - component: {fileID: 1730421428026957022}
   m_Layer: 6
   m_Name: Security
   m_TagString: Untagged
@@ -297,6 +298,8 @@ MonoBehaviour:
   maxStealDistance: 3
   highSuspicionOnStealRange: 1.5
   line: {fileID: 0}
+  stealCoyoteTime: 1
+  coyoteBlinkSpeed: 10
   killThreshold: 3
   killWindow: 10
 --- !u!114 &7028535624047453758
@@ -319,8 +322,11 @@ MonoBehaviour:
   minActivityTime: 3
   maxActivityTime: 12
   idleDecisionDelay: 1.5
+  isStationary: 0
   patrolRadius: 6
   patrolPointCount: 4
+  stationaryLookAngle: 45
+  stationaryLookInterval: 3
   allowedRooms: []
 --- !u!50 &8426463258069594751
 Rigidbody2D:
@@ -371,3 +377,26 @@ NavMeshAgent:
   m_BaseOffset: 0.5
   m_WalkableMask: 4294967295
   m_ObstacleAvoidanceType: 4
+--- !u!114 &1730421428026957022
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6315824630063648389}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b91eda1c9095314499c77053208c496, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  waypointCount: 2
+  deviationRadius: 1.8
+  navSampleRadius: 3
+  wallClearance: 0.5
+  speedNoiseAmplitude: 0.28
+  speedNoiseFrequency: 0.4
+  micropauseProbability: 0.35
+  micropauseMin: 0.4
+  micropauseMax: 2.2
+  lookAroundOnPause: 1
+  lookAroundAngle: 30

@@ -32,6 +32,7 @@ public class ControllerNPC : MonoBehaviour
         Socializing,    // A conversar numa zona social
         Resting,        // Sentado / a descansar
         Patrolling,     // Segurança: a gerar rondas na área
+        Watching,       // Guarda estático: look-around no posto
         Investigating,  // Segurança: a ir a um incidente
         Returning       // A regressar ao posto
     }
@@ -63,12 +64,22 @@ public class ControllerNPC : MonoBehaviour
     public float idleDecisionDelay = 1.5f;
 
     [Header("Patrol (Hexagon only)")]
-    [Tooltip("Raio de patrulha em torno do posto — sem waypoints manuais")]
+    [Tooltip("Guarda estático — fica no posto a observar, só se move se alertado")]
+    public bool isStationary = false;
+
+    [Tooltip("Raio de patrulha em torno do posto (ignorado se isStationary = true)")]
     public float patrolRadius = 6f;
 
     [Tooltip("Quantos pontos de patrulha gerar dinamicamente")]
     [Range(2, 8)]
     public int patrolPointCount = 4;
+
+    [Tooltip("Ângulo do look-around no posto, para cada lado (graus)")]
+    [Range(10f, 90f)]
+    public float stationaryLookAngle = 45f;
+
+    [Tooltip("Tempo entre cada rotação do look-around (segundos)")]
+    public float stationaryLookInterval = 3f;
 
     [Header("Allowed Rooms")]
     public List<GameObject> allowedRooms;
@@ -86,6 +97,8 @@ public class ControllerNPC : MonoBehaviour
     private float           stateTimer  = 0f;
     private float           idleTimer   = 0f;
     private bool            isDeciding  = false;
+    private float           lookTimer   = 0f;   // timer do look-around estático
+    private int             lookDir     = 1;     // direção atual do look-around
 
     // Patrulha procedural — lista de pontos gerados em runtime
     private List<Vector3>   patrolRoute = new List<Vector3>();
@@ -121,8 +134,8 @@ public class ControllerNPC : MonoBehaviour
         if (playerObj != null)
             playerTransform = playerObj.transform;
 
-        // Gera a rota de patrulha para os Hexagon
-        if (shapeData.type == ShapeType.Hexagon)
+        // Gera a rota de patrulha apenas para Hexagon não estáticos
+        if (shapeData.type == ShapeType.Hexagon && !isStationary)
             GeneratePatrolRoute();
 
         // Stagger inicial para os NPCs não decidirem todos ao mesmo tempo
@@ -140,6 +153,7 @@ public class ControllerNPC : MonoBehaviour
             case NPCState.Socializing:
             case NPCState.Resting:       UpdateTimedActivity(); break;
             case NPCState.Patrolling:    UpdatePatrolling();    break;
+            case NPCState.Watching:      UpdateWatching();      break;
             case NPCState.Investigating: /* gerido por callback */               break;
             case NPCState.Returning:     /* gerido por callback */               break;
         }
@@ -192,9 +206,36 @@ public class ControllerNPC : MonoBehaviour
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Decision coroutine
-    // ──────────────────────────────────────────────────────────────────────────
+    /// <summary>Guarda estático: roda lentamente de um lado para o outro no posto.</summary>
+    void UpdateWatching()
+    {
+        lookTimer -= Time.deltaTime;
+        if (lookTimer <= 0f)
+        {
+            lookDir    = -lookDir; // alterna esquerda/direita
+            lookTimer  = stationaryLookInterval + Random.Range(-0.5f, 0.5f);
+            float targetAngle = lookDir * stationaryLookAngle;
+            StartCoroutine(SmoothRotateToAngle(targetAngle, stationaryLookInterval * 0.6f));
+        }
+    }
+
+    IEnumerator SmoothRotateToAngle(float angleDeg, float duration)
+    {
+        Quaternion from = transform.rotation;
+        // Em 2D rotação no eixo Z a partir da rotação base (homeRotation)
+        Quaternion to   = Quaternion.Euler(0f, 0f, angleDeg);
+        float elapsed   = 0f;
+
+        while (elapsed < duration)
+        {
+            transform.rotation = Quaternion.Slerp(from, to, elapsed / duration);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+        transform.rotation = to;
+    }
+
+
 
     IEnumerator DecideNextBehavior()
     {
@@ -226,8 +267,10 @@ public class ControllerNPC : MonoBehaviour
     // ── Hexagon (Segurança) ───────────────────────────────────────────────────
     void DecideHexagon()
     {
-        // Segurança retoma sempre a patrulha
-        currentState = NPCState.Patrolling;
+        if (isStationary)
+            currentState = NPCState.Watching;
+        else
+            currentState = NPCState.Patrolling;
     }
 
     // ── Triangle (VIP) ────────────────────────────────────────────────────────
@@ -292,7 +335,8 @@ public class ControllerNPC : MonoBehaviour
         ReleaseCurrentInterestPoint();
 
         Vector3 randomDir = Random.insideUnitCircle;
-        Vector3 offset    = new Vector3(randomDir.x, 0f, randomDir.y) * radius;
+        // 2D — offset no plano XY
+        Vector3 offset    = new Vector3(randomDir.x, randomDir.y, 0f) * radius;
         Vector3 candidate = transform.position + offset;
 
         Vector3 dest = homePosition; // fallback
@@ -316,7 +360,7 @@ public class ControllerNPC : MonoBehaviour
         {
             onArrived?.Invoke();
             if (shapeData.type == ShapeType.Hexagon)
-                currentState = NPCState.Patrolling;
+                currentState = isStationary ? NPCState.Watching : NPCState.Patrolling;
             else
                 EnterIdle();
         });
@@ -380,10 +424,11 @@ public class ControllerNPC : MonoBehaviour
             float distance  = Random.Range(patrolRadius * 0.5f, patrolRadius);
             float rad       = angle * Mathf.Deg2Rad;
 
+            // 2D — movimento no plano XY, não XZ
             Vector3 candidate = homePosition + new Vector3(
                 Mathf.Cos(rad) * distance,
-                0f,
-                Mathf.Sin(rad) * distance
+                Mathf.Sin(rad) * distance,
+                0f
             );
 
             if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, patrolRadius, NavMesh.AllAreas))
@@ -405,15 +450,21 @@ public class ControllerNPC : MonoBehaviour
     /// <summary>Envia um Hexagon investigar uma posição. Pode ser chamado externamente.</summary>
     public void InvestigatePosition(Vector3 position)
     {
-        if (shapeData.type != ShapeType.Hexagon) return;
+        if (shapeData.type != ShapeType.Hexagon)
+        {
+            Debug.Log($"[NPC] {gameObject.name} ignorou InvestigatePosition — não é Hexagon (é {shapeData.type})");
+            return;
+        }
+
+        Debug.Log($"[NPC] {gameObject.name} a investigar {position}");
 
         nav.StopJourney();
         ReleaseCurrentInterestPoint();
         currentState = NPCState.Investigating;
 
-        nav.StartJourney(position, HumanNavigation.MovementProfile.Guard, () =>
+        nav.StartJourney(position, HumanNavigation.MovementProfile.Urgent, () =>
         {
-            // Após investigar, volta ao posto e retoma patrulha
+            Debug.Log($"[NPC] {gameObject.name} chegou ao local, a regressar ao posto");
             ReturnHome();
         });
     }

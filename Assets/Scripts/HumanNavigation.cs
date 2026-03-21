@@ -35,6 +35,11 @@ public class HumanNavigation : MonoBehaviour
     // Inspector tunables
     // ──────────────────────────────────────────────────────────────────────────
 
+    [Header("Rotation")]
+    [Tooltip("Velocidade de rotação na direção do movimento (maior = mais snappy, menor = mais suave)")]
+    [Range(1f, 20f)]
+    public float rotationSpeed = 8f;
+
     [Header("Path Generation")]
     [Tooltip("Quantos pontos intermédios gerar entre origem e destino")]
     [Range(0, 4)]
@@ -188,7 +193,6 @@ public class HumanNavigation : MonoBehaviour
 
     IEnumerator WalkToPoint(Vector3 target, bool isFinal)
     {
-        // Garante que o destino está definido
         if (!agent.hasPath || agent.pathStatus == NavMeshPathStatus.PathInvalid)
             agent.SetDestination(target);
 
@@ -200,15 +204,25 @@ public class HumanNavigation : MonoBehaviour
             timeout -= Time.deltaTime;
             
             // Velocidade orgânica via Perlin noise
-            float noise      = Mathf.PerlinNoise(Time.time * speedNoiseFrequency + noiseOffset, 0f);
-            float speedMult  = 1f + (noise - 0.5f) * 2f * speedNoiseAmplitude;
-            agent.speed      = baseSpeed * Mathf.Clamp(speedMult, 0.5f, 1.5f);
+            float noise     = Mathf.PerlinNoise(Time.time * speedNoiseFrequency + noiseOffset, 0f);
+            float speedMult = 1f + (noise - 0.5f) * 2f * speedNoiseAmplitude;
+            agent.speed     = baseSpeed * Mathf.Clamp(speedMult, 0.5f, 1.5f);
 
-            // Verifica chegada
-            if (HasArrivedAt(target))
-                break;
+            // Rotação na direção do movimento — funciona em 2D (eixo Z)
+            Vector2 velocity = new Vector2(agent.velocity.x, agent.velocity.y);
+            if (velocity.sqrMagnitude > 0.01f)
+            {
+                float angle = Mathf.Atan2(velocity.y, velocity.x) * Mathf.Rad2Deg;
+                Quaternion targetRot = Quaternion.Euler(0f, 0f, angle);
+                transform.rotation  = Quaternion.Slerp(
+                    transform.rotation,
+                    targetRot,
+                    rotationSpeed * Time.deltaTime
+                );
+            }
 
-            // Destino perdido (obstáculo dinâmico) — recalcula
+            if (HasArrivedAt(target)) break;
+
             if (!agent.hasPath && !agent.pathPending && timeout > 0f)
                 agent.SetDestination(target);
 
@@ -433,4 +447,4 @@ public class HumanNavigation : MonoBehaviour
         }
     }
     #endif
-}
+}   

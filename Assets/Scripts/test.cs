@@ -11,13 +11,15 @@ public class Test : MonoBehaviour, IInteractable
     private Coroutine _stealCoroutine;
     private bool _isStealing = false;
 
-    [SerializeField] private float minStealDistance = 0.8f;
     [SerializeField] private float maxStealDistance = 3f;
+    [SerializeField] private float highSuspicionOnStealRange = 1.5f;
+    private Coroutine _closeSuspicionRoutine;
 
 
     void Awake()
     {
         shapeVisualizer = GetComponent<ShapeVisualizer>();
+        suspicionDetector = GetComponentInParent<SuspicionDetector>();
     }
 
     void Start()
@@ -29,7 +31,7 @@ public class Test : MonoBehaviour, IInteractable
     }
     //when clicked, steals NPC's shape and applies to player
     //currently leaving them as empty husks but its instantaneous
-    
+
     //todo: implementing a goldilocks zone where the player has to remain close while 
     // it transfers the shape, staying too close alerts and raises suspicion
     // get too far and you lose it and risk getting caught trying to steal it again
@@ -43,7 +45,7 @@ public class Test : MonoBehaviour, IInteractable
         if (_isStealing)
         {
             Debug.Log("is stealing right now");
-            return; 
+            return;
         }
         if (IsWithinGoldilocksZone())
         {
@@ -60,10 +62,43 @@ public class Test : MonoBehaviour, IInteractable
 
     void Update()
     {
-        if (_isStealing && !IsWithinGoldilocksZone())
+        /*f (_isStealing && !IsWithinGoldilocksZone())
         {
             Debug.Log("move out of rande");
             CancelSteal();
+        }*/
+        Steal();
+    }
+
+    void Steal()
+    {
+        if (!_isStealing) return;
+
+        float distance = Vector2.Distance(playerController.transform.position, transform.position);
+
+        if (distance >= maxStealDistance)
+        {
+            Debug.Log("too far, steal canceled");
+            CancelSteal();
+            return;
+        }
+
+        if (distance < highSuspicionOnStealRange)
+        {
+            if (_closeSuspicionRoutine == null && suspicionDetector != null)
+            {
+                Debug.Log("Entered high suspicion zone during steal");
+                _closeSuspicionRoutine = suspicionDetector.StartCoroutine(suspicionDetector.RaiseSuspicion());
+            }
+        }
+        else
+        {
+            if (_closeSuspicionRoutine != null)
+            {
+                Debug.Log("Left high suspicion zone during steal");
+                suspicionDetector.StopCoroutine(_closeSuspicionRoutine);
+                _closeSuspicionRoutine = null;
+            }
         }
     }
 
@@ -71,24 +106,28 @@ public class Test : MonoBehaviour, IInteractable
     private bool IsWithinGoldilocksZone()
     {
         float distance = Vector2.Distance(playerController.transform.position, transform.position);
-        return distance > minStealDistance && distance < maxStealDistance; 
-        
+        return distance < maxStealDistance;
     }
 
     private void CancelSteal()
-{
-    if (_stealCoroutine != null)
     {
-        StopCoroutine(_stealCoroutine);
-        _stealCoroutine = null;
+        if (_stealCoroutine != null)
+        {
+            StopCoroutine(_stealCoroutine);
+            _stealCoroutine = null;
+        }
+        if (_closeSuspicionRoutine != null)
+        {
+            suspicionDetector.StopCoroutine(_closeSuspicionRoutine);
+            _closeSuspicionRoutine = null;
+        }
+        _isStealing = false;
     }
-    _isStealing = false;
-}
 
     IEnumerator CommenceSteal()
     {
         // Placeholder for any animation or delay during the stealing process
-        yield return new WaitForSeconds(3f); // Simulate time taken to steal
+        yield return new WaitForSeconds(3f);
         playerController.ApplyShape(shapeData);
         shapeData = Resources.Load<ShapeData>("HuskData");
         if (shapeData == null)
@@ -97,14 +136,16 @@ public class Test : MonoBehaviour, IInteractable
             yield break;
         }
         shapeVisualizer.ApplyShape(shapeData);
-        //set tag to Draggable
         gameObject.tag = "Draggable";
         _isStealing = false;
+        CancelSteal();
     }
 
     private void OnDrawGizmos()
     {
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, maxStealDistance);
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, highSuspicionOnStealRange);
     }
 }

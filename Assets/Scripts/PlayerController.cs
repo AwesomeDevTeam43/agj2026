@@ -5,6 +5,7 @@ public class PlayerController : MonoBehaviour
     private InputHandler input;
 
     [SerializeField] private ShapeData shapeData;
+    private ShapeVisualizer shapeVisualizer;
 
     [Header("Movement")]
     [SerializeField] private float moveSpeed = 5f;
@@ -18,10 +19,18 @@ public class PlayerController : MonoBehaviour
 
     private Vector2 currentVelocity;
 
+    void Awake()
+    {
+        shapeVisualizer = GetComponent<ShapeVisualizer>();
+    }
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
         input = GetComponent<InputHandler>();
+        if (shapeData != null)
+        {
+            shapeVisualizer.ApplyShape(shapeData);
+        }
     }
 
     void Update()

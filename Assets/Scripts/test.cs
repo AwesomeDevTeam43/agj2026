@@ -122,7 +122,7 @@ public class Test : MonoBehaviour, IInteractable
         if (!_isStealing) return;
 
         float distance = Vector2.Distance(playerController.transform.position, transform.position);
-
+        
         if (distance >= maxStealDistance)
         {
             // If we've exceeded the coyote time limit, cancel the steal
@@ -181,6 +181,7 @@ public class Test : MonoBehaviour, IInteractable
         if (_stealCoroutine != null)
         {
             StopCoroutine(_stealCoroutine);
+            AudioManager.Instance.Stop("hack");
             _stealCoroutine = null;
         }
         if (_closeSuspicionRoutine != null)
@@ -232,6 +233,7 @@ public class Test : MonoBehaviour, IInteractable
 
     IEnumerator CommenceSteal()
     {
+        AudioManager.Instance.Play("hack");
         // Placeholder for any animation or delay during the stealing process
         if (shapeData.type != ShapeType.Husk)
         {
@@ -264,6 +266,10 @@ public class Test : MonoBehaviour, IInteractable
             //set tag to Draggable
             gameObject.tag = "Draggable";
             _isStealing = false;
+
+            // Disable NPC logic so it stops moving
+            var controller = GetComponent<ControllerNPC>();
+            if (controller != null) controller.enabled = false;
 
             if (killHistory.Count >= killThreshold)
             {

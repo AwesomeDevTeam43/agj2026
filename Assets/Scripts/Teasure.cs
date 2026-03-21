@@ -14,6 +14,8 @@ public class Teasure : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D collision)
     {
+        Debug.Log($"[Treasure] Something collided with {gameObject.name}: {collision.gameObject.name} (Tag: {collision.tag})");
+
         // Check if the object colliding is the player
         if (collision.CompareTag("Player"))
         {
@@ -21,6 +23,10 @@ public class Teasure : MonoBehaviour
             if (GameManager.Instance != null)
             {
                 GameManager.Instance.CollectTreasure(_locale);
+            }
+            else
+            {
+                Debug.LogError("[Treasure] GameManager.Instance is NULL! Cannot collect.");
             }
 
             // Destroy the treasure so it disappears from the map

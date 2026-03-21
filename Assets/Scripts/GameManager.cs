@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using TMPro;
 
 public class GameManager : MonoBehaviour
 {
@@ -14,8 +15,11 @@ public class GameManager : MonoBehaviour
     private bool vipRoomTreasure = false;
     private bool officeRoomTreasure = false;
     
-    private string checkBox = "\udb83\udc52";
-    private string uncheckBox = "\udb83\udc52";
+    [Header("Checklist UI")]
+    [SerializeField] private TextMeshProUGUI _checklistText;
+    
+    [SerializeField] private string checkBox = "[X]";
+    [SerializeField] private string uncheckBox = "[ ]";
 
     private bool _isGameOver = false;
 
@@ -35,9 +39,10 @@ public class GameManager : MonoBehaviour
         Time.timeScale = 1f;
         _isGameOver = false;
 
-        _winScreen.SetActive(false);
-        _loseScreen.SetActive(false);
+        //_winScreen.SetActive(false);
+        //_loseScreen.SetActive(false);
 
+        UpdateChecklistUI();
     }
 
     private void Update()
@@ -68,12 +73,25 @@ public class GameManager : MonoBehaviour
                 break;
         }
 
+        UpdateChecklistUI();
         Debug.Log($"Collected {locale} treasure! Progress: Staff={staffRoomTreasure}, VIP={vipRoomTreasure}, Office={officeRoomTreasure}");
 
         // Check if all three have been collected
         if (staffRoomTreasure && vipRoomTreasure && officeRoomTreasure)
         {
             TriggerWin();
+        }
+    }
+
+    private void UpdateChecklistUI()
+    {
+        if (_checklistText != null)
+        {
+            string staffStr = $"{(staffRoomTreasure ? checkBox : uncheckBox)} Staff Room Treasure\n";
+            string vipStr = $"{(vipRoomTreasure ? checkBox : uncheckBox)} VIP Room Treasure\n";
+            string officeStr = $"{(officeRoomTreasure ? checkBox : uncheckBox)} Office Room Treasure";
+            
+            _checklistText.text = staffStr + vipStr + officeStr;
         }
     }
 

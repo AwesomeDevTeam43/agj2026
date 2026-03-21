@@ -28,6 +28,18 @@ public class LockedDoor : MonoBehaviour
             {
                 _authorizedEntries++;
                 OpenDoor();
+                //only play sound if its the player
+                if (playerShape.gameObject.CompareTag("Player"))
+                {
+                    AudioManager.Instance.Play("opendoor");
+                }
+            }
+            else
+            {
+                if (playerShape.gameObject.CompareTag("Player"))
+                    {
+                        AudioManager.Instance.Play("wrongdoor");
+                    }
             }
         }
     }

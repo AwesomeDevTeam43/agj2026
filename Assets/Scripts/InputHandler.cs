@@ -1,6 +1,7 @@
 
 using UnityEngine;
 using UnityEngine.InputSystem;
+using System;
 
 public class InputHandler : MonoBehaviour
 {
@@ -12,6 +13,9 @@ public class InputHandler : MonoBehaviour
 
     private InputAction movementAction;
     private InputAction dragAction;
+    private InputAction showControlsAction;
+
+    public event Action OnShowControls;
     /*private InputAction lookAction;
     private InputAction aimAction;
     private InputAction jumpAction;
@@ -31,6 +35,7 @@ public class InputHandler : MonoBehaviour
 
         movementAction = mapReference.FindAction("Move");
         dragAction = mapReference.FindAction("Drag");
+        showControlsAction = mapReference.FindAction("ShowControls");
         /*jumpAction = mapReference.FindAction("Jump");
         lookAction = mapReference.FindAction("Look");
         aimAction = mapReference.FindAction("Aim");
@@ -58,6 +63,11 @@ public class InputHandler : MonoBehaviour
         sprintAction.canceled += inputInfo => SprintTriggered = false;*/
         dragAction.performed += inputInfo => DragInput = true;
         dragAction.canceled += inputInfo => DragInput = false;
+        
+        if (showControlsAction != null)
+        {
+            showControlsAction.performed += inputInfo => OnShowControls?.Invoke();
+        }
     }
 
     private void OnEnable()

@@ -30,6 +30,7 @@ public class LockedDoor : MonoBehaviour
             }
         }
     }
+
     private void OnTriggerExit2D(Collider2D other)
     {
         if (other.TryGetComponent<ShapeVisualizer>(out var playerShape))

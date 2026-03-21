@@ -611,6 +611,8 @@ MonoBehaviour:
   maxStealDistance: 3.4
   highSuspicionOnStealRange: 2
   line: {fileID: 0}
+  killThreshold: 3
+  killWindow: 10
 --- !u!60 &1752813310
 PolygonCollider2D:
   m_ObjectHideFlags: 0
@@ -875,7 +877,7 @@ LineRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 0}
+  - {fileID: 10306, guid: 0000000000000000f000000000000000, type: 0}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

@@ -17,6 +17,10 @@ public class Test : MonoBehaviour, IInteractable
     private Coroutine _closeSuspicionRoutine;
 
     [SerializeField] private LineRenderer line;
+    [SerializeField] private float stealCoyoteTime = 1f;
+    [SerializeField] private float coyoteBlinkSpeed = 10f;
+    private float _lastTimeWithinStealRange = float.NegativeInfinity;
+    private bool _isInStealCoyoteTime = false;
 
     private Queue<float> killHistory = new Queue<float>();
 
@@ -90,11 +94,27 @@ public class Test : MonoBehaviour, IInteractable
 
         if (distance >= maxStealDistance)
         {
-            Debug.Log("too far, steal canceled");
-            CancelSteal();
-            return;
+            // If we've exceeded the coyote time limit, cancel the steal
+            if (Time.time - _lastTimeWithinStealRange > stealCoyoteTime)
+            {
+                Debug.Log("too far and coyote time expired, steal canceled");
+                CancelSteal();
+                return;
+            }
+            else
+            {
+                // We are out of range but still within coyote time
+                _isInStealCoyoteTime = true;
+            }
+        }
+        else
+        {
+            // We are within range, reset the coyote timer tracker and flag
+            _lastTimeWithinStealRange = Time.time;
+            _isInStealCoyoteTime = false;
         }
 
+        // --- Keep the rest of your Steal() logic (suspicion ranges & kill history) ---
         if (distance < highSuspicionOnStealRange)
         {
             if (_closeSuspicionRoutine == null && suspicionDetector != null)
@@ -138,18 +158,34 @@ public class Test : MonoBehaviour, IInteractable
             _closeSuspicionRoutine = null;
         }
         _isStealing = false;
+        _isInStealCoyoteTime = false; // Add this reset
+
         if (line != null) line.enabled = false;
     }
-
 
     private void UpdateStealLine()
     {
         if (line == null) return;
-
         if (!_isStealing || playerController == null)
         {
             line.enabled = false;
             return;
+        }
+
+        Color baseColor = playerController.shapeData.color;
+
+        // Make the line blink if in coyote time
+        if (_isInStealCoyoteTime)
+        {
+            float blinkValue = Mathf.PingPong(Time.time * coyoteBlinkSpeed, 1f);
+            Color blinkColor = Color.Lerp(baseColor, Color.clear, blinkValue);
+            line.startColor = blinkColor;
+            line.endColor = blinkColor;
+        }
+        else
+        {
+            line.startColor = baseColor;
+            line.endColor = baseColor;
         }
 
         Vector3 a = playerController.transform.position;
@@ -166,31 +202,54 @@ public class Test : MonoBehaviour, IInteractable
     IEnumerator CommenceSteal()
     {
         // Placeholder for any animation or delay during the stealing process
-        yield return new WaitForSeconds(3f);
-        playerController.ApplyShape(shapeData);
-        shapeData = Resources.Load<ShapeData>("HuskData");
-        if (shapeData == null)
+        if (shapeData.type != ShapeType.Husk)
         {
-            Debug.LogError("Failed to load HuskData ShapeData from Resources");
+            float stealDuration = 3f;
+            float currentStealTime = 0f;
+
+            // Loop until the required time is met
+            while (currentStealTime < stealDuration)
+            {
+                // Only increment the timer if we are NOT in coyote time
+                if (!_isInStealCoyoteTime)
+                {
+                    currentStealTime += Time.deltaTime;
+                }
+
+                // Wait for the next frame
+                yield return null;
+            }
+
+            playerController.ApplyShape(shapeData);
+            shapeData = Resources.Load<ShapeData>("HuskData");
+            if (shapeData == null)
+            {
+                Debug.LogError("Failed to load HuskData ShapeData from Resources");
+                yield break;
+            }
+            shapeVisualizer.ApplyShape(shapeData);
+            killHistory.Enqueue(Time.time);
+
+            //set tag to Draggable
+            gameObject.tag = "Draggable";
+            _isStealing = false;
+
+            if (killHistory.Count >= killThreshold)
+            {
+                Debug.Log("Kill threshold exceeded, maxing out suspicion!");
+                suspicionDetector.RaiseGlobalAlarm();
+            }
+            gameObject.tag = "Draggable";
+            _isStealing = false;
+            CancelSteal();
+        }
+        else
+        {
+            Debug.LogWarning("Attempted to steal from a husk, which is not allowed.");
+            _isStealing = false;
             yield break;
         }
-        shapeVisualizer.ApplyShape(shapeData);
-        killHistory.Enqueue(Time.time);
-        //set tag to Draggable
-        gameObject.tag = "Draggable";
-        _isStealing = false;
-
-        if (killHistory.Count >= killThreshold)
-        {
-            Debug.Log("Kill threshold exceeded, maxing out suspicion!");
-            suspicionDetector.RaiseGlobalAlarm();
-        }
-        gameObject.tag = "Draggable";
-        _isStealing = false;
-        CancelSteal();
     }
-
-
 
     private void OnDrawGizmos()
     {

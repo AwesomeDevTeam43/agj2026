@@ -15,12 +15,17 @@ public class DistractionDevice : MonoBehaviour
 
         foreach (Collider2D hitCollider in hitColliders)
         {
-            if (hitCollider.CompareTag("Guard"))
+            ControllerNPC npc = hitCollider.GetComponent<ControllerNPC>();
+            if (npc != null)
             {
-                // GONKI ESTA LOGICA E PARA TU IMPLEMENTARES PARA OS GUARDAS
-                // Exemplo: hitCollider.GetComponent<GuardAI>().Investigate(transform.position);
-                Debug.Log($"Guard {hitCollider.name} is investigating the distraction!");
+                npc.InvestigatePosition(transform.position);
             }
         }
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawWireSphere(transform.position, _distractionRadius);
     }
 }

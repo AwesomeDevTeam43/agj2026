@@ -46,6 +46,9 @@ public class HumanNavigation : MonoBehaviour
     [Tooltip("Raio de amostragem no NavMesh para waypoints intermédios")]
     public float navSampleRadius = 3f;
 
+    [Tooltip("Distância mínima às paredes — pontos mais perto que isto são descartados. Deve ser >= Agent Radius do NavMeshAgent.")]
+    public float wallClearance = 0.5f;
+
     [Header("Speed Variation")]
     [Tooltip("Amplitude do noise de velocidade (0 = velocidade constante)")]
     [Range(0f, 0.6f)]
@@ -230,8 +233,8 @@ public class HumanNavigation : MonoBehaviour
         float targetAngle = Random.Range(-lookAroundAngle, lookAroundAngle);
         float halfDuration = duration * 0.45f;
 
-        // Vira para o lado
-        Quaternion lookRot = baseRot * Quaternion.Euler(0f, targetAngle, 0f);
+        // Vira para o lado — em 2D a rotação é no eixo Z
+        Quaternion lookRot = baseRot * Quaternion.Euler(0f, 0f, targetAngle);
         while (elapsed < halfDuration)
         {
             transform.rotation = Quaternion.Slerp(baseRot, lookRot, elapsed / halfDuration);
@@ -264,31 +267,44 @@ public class HumanNavigation : MonoBehaviour
 
         if (waypointCount <= 0)
         {
-            // Sem waypoints — vai direto (perfil Guard/Urgent)
             path.Add(destination);
             return path;
         }
 
-        // Distribui waypoints ao longo da linha origem→destino
-        // com desvios perpendiculares aleatórios
-        Vector3 dir        = (destination - origin);
-        Vector3 perpXZ     = new Vector3(-dir.z, 0f, dir.x).normalized; // perpendicular no plano XZ
+        // Em 2D o movimento é no plano XY — perpendicular é no eixo X/Y
+        Vector3 dir      = (destination - origin);
+        // Perpendicular no plano XY (2D): roda 90° no plano
+        Vector3 perpXY   = new Vector3(-dir.y, dir.x, 0f).normalized;
 
         for (int i = 1; i <= waypointCount; i++)
         {
             float   t         = (float)i / (waypointCount + 1);
             Vector3 linePoint = Vector3.Lerp(origin, destination, t);
 
-            // Desvio lateral — usando noise para ser suave entre pontos
+            // Desvio lateral suave via Perlin noise
             float   noiseVal  = Mathf.PerlinNoise(noiseOffset + t * 3f, noiseOffset) * 2f - 1f;
             float   deviation = noiseVal * deviationRadius;
-            Vector3 candidate = linePoint + perpXZ * deviation;
+            Vector3 candidate = linePoint + perpXY * deviation;
 
-            // Ajusta para o NavMesh mais próximo
+            // Em 2D mantém o Z original do agente (o NavMesh está nesse plano)
+            candidate.z = origin.z;
+
+            // Afasta do centro para evitar colar em paredes —
+            // amostra numa área maior e rejeita pontos demasiado perto de obstáculos
             if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, navSampleRadius, NavMesh.AllAreas))
-                path.Add(hit.position);
+            {
+                // Verifica se o ponto amostrado não está colado a uma borda
+                // fazendo um segundo sample com raio menor — se falhar é porque
+                // está muito perto de uma parede
+                if (NavMesh.SamplePosition(hit.position, out _, wallClearance, NavMesh.AllAreas))
+                    path.Add(hit.position);
+                else
+                    path.Add(linePoint); // muito perto da parede, vai pelo centro
+            }
             else
-                path.Add(linePoint); // fallback sem desvio
+            {
+                path.Add(linePoint);
+            }
         }
 
         path.Add(destination);

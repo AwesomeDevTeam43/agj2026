@@ -463,10 +463,13 @@ public class ControllerNPC : MonoBehaviour
 
     IEnumerator SmoothFace(Vector3 direction)
     {
-        float elapsed      = 0f;
-        float duration     = 0.5f;
-        Quaternion from    = transform.rotation;
-        Quaternion to      = Quaternion.LookRotation(direction, Vector3.up);
+        float elapsed  = 0f;
+        float duration = 0.5f;
+        Quaternion from = transform.rotation;
+
+        // Em 2D a rotação é no eixo Z
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+        Quaternion to = Quaternion.Euler(0f, 0f, angle);
 
         while (elapsed < duration)
         {

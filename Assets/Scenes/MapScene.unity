@@ -378,6 +378,17 @@ Transform:
   - {fileID: 1860205761}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 90}
+--- !u!114 &79808395 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6139287525890646763, guid: 9d1e79e2488b2bc4db34d259fa2fc02e, type: 3}
+  m_PrefabInstance: {fileID: 1473381642}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67db9e8f0e2ae9c40bc1e2b64352a6b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1001 &80747603
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -585,6 +596,17 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1768951432}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &107561435 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 9142124594109770261, guid: 9d1e79e2488b2bc4db34d259fa2fc02e, type: 3}
+  m_PrefabInstance: {fileID: 1473381642}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &149984222
 GameObject:
   m_ObjectHideFlags: 0
@@ -847,8 +869,8 @@ MonoBehaviour:
   _checklistText: {fileID: 248110077}
   checkBox: '[x]'
   uncheckBox: '[  ]'
-  _suspicionBar: {fileID: 0}
-  _suspicionText: {fileID: 0}
+  _suspicionBar: {fileID: 79808395}
+  _suspicionText: {fileID: 107561435}
 --- !u!114 &240997503
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -254,6 +254,8 @@ public class Test : MonoBehaviour, IInteractable
             }
 
             playerController.ApplyShape(shapeData);
+            PlayerController pc = playerController.GetComponent<PlayerController>();
+            pc.SetSpeed(shapeData.baseSpeed);
             shapeData = Resources.Load<ShapeData>("HuskData");
             if (shapeData == null)
             {

@@ -10,10 +10,10 @@ using UnityEngine.AI;
 /// Não usa nenhum waypoint manual — os percursos são gerados proceduralmente.
 ///
 /// Tipos:
-///   Circle  (Convidado) — passeia, admira quadros, bebe, socializa
-///   Hexagon (Segurança) — patrulha a zona inicial, investiga incidentes
-///   Triangle (VIP)      — quartos privados, socializa longamente, pouco movimento
-///   Square  (Staff)     — maioritariamente estático, circula ocasionalmente
+///   Circle  (Convidado) — passeia de um lado para o outro, bebe, admira, socializa
+///   Hexagon (Segurança) — estático a vigiar OU patrulha, investiga incidentes
+///   Triangle (VIP)      — vigilante, zonas restritas, quartos privados, pouco movimento
+///   Square  (Staff)     — maioritariamente estático no posto, circula raramente
 /// </summary>
 [RequireComponent(typeof(NavMeshAgent))]
 [RequireComponent(typeof(HumanNavigation))]
@@ -35,7 +35,8 @@ public class ControllerNPC : MonoBehaviour
         Watching,       // Guarda estático: look-around no posto
         Investigating,  // Segurança: a ir a um incidente
         Returning,      // A regressar ao posto
-        CallingGuard    // Trabalhador: em pânico a correr para chamar um segurança
+        CallingGuard,    // Convidado/VIP: em pânico a chamar um segurança
+        Dead            // NPC morto (usado para corpos no chão, não tem comportamento)
     }
 
     public NPCState currentState = NPCState.Idle;
@@ -93,15 +94,16 @@ public class ControllerNPC : MonoBehaviour
     private HumanNavigation nav;
 
     private Vector3         homePosition;
+    private Quaternion      homeRotation;           // rotação no spawn — base do look-around
     private InterestPoint   currentInterestPoint;
 
-    private float           stateTimer  = 0f;
-    private float           idleTimer   = 0f;
-    private bool            isDeciding  = false;
-    private float           lookTimer   = 0f;   // timer do look-around estático
-    private int             lookDir     = 1;     // direção atual do look-around
+    private float           stateTimer     = 0f;
+    private float           idleTimer      = 0f;
+    private bool            isDeciding     = false;
+    private float           lookTimer      = 0f;
+    private int             lookDir        = 1;
+    private float           bodyCheckTimer = 0f;
 
-    // Patrulha procedural — lista de pontos gerados em runtime
     private List<Vector3>   patrolRoute = new List<Vector3>();
     private int             patrolIndex = 0;
 
@@ -124,9 +126,8 @@ public class ControllerNPC : MonoBehaviour
         if (sr != null && shapeData != null)
             sr.color = shapeData.color;
 
-        homePosition = initialPosition != null
-            ? initialPosition.position
-            : transform.position;
+        homePosition = initialPosition != null ? initialPosition.position : transform.position;
+        homeRotation = transform.rotation; // base para o look-around do guarda estático
 
         if (interestPoints == null || interestPoints.Length == 0)
             interestPoints = FindObjectsByType<InterestPoint>(FindObjectsSortMode.None);
@@ -135,36 +136,34 @@ public class ControllerNPC : MonoBehaviour
         if (playerObj != null)
             playerTransform = playerObj.transform;
 
-        // Gera a rota de patrulha apenas para Hexagon não estáticos
         if (shapeData.type == ShapeType.Hexagon && !isStationary)
             GeneratePatrolRoute();
 
-        // Stagger inicial para os NPCs não decidirem todos ao mesmo tempo
+        // Stagger inicial — NPCs não decidem todos ao mesmo tempo
         idleTimer = Random.Range(0f, idleDecisionDelay * 3f);
+        // lookTimer começa cheio — guarda não roda logo no primeiro frame
+        lookTimer = stationaryLookInterval;
     }
-
-    float bodyCheckTimer = 0f;
 
     void Update()
     {
         if (nav == null || shapeData == null) return;
 
-        if (shapeData.type != ShapeType.Husk)
+        // Deteção de corpos — todos exceto Husks, e não durante ações prioritárias
+        if (shapeData.type != ShapeType.Husk &&
+            currentState != NPCState.CallingGuard &&
+            currentState != NPCState.Investigating)
         {
-            if (currentState != NPCState.CallingGuard && currentState != NPCState.Investigating)
+            bodyCheckTimer -= Time.deltaTime;
+            if (bodyCheckTimer <= 0f)
             {
-                bodyCheckTimer -= Time.deltaTime;
-                if (bodyCheckTimer <= 0f)
-                {
-                    bodyCheckTimer = 0.5f;
-                    CheckForDeadBodies();
-                }
+                bodyCheckTimer = 0.5f;
+                CheckForDeadBodies();
             }
         }
 
         switch (currentState)
         {
-            case NPCState.CallingGuard:  /* gerido por callback */ break;
             case NPCState.Idle:          UpdateIdle();          break;
             case NPCState.Walking:       /* gerido por HumanNavigation + callback */ break;
             case NPCState.Observing:
@@ -174,99 +173,25 @@ public class ControllerNPC : MonoBehaviour
             case NPCState.Patrolling:    UpdatePatrolling();    break;
             case NPCState.Watching:      UpdateWatching();      break;
             case NPCState.Investigating: UpdateInvestigating(); break;
-            case NPCState.Returning:     /* gerido por callback */               break;
-        }
-    }
-
-    void UpdateInvestigating()
-    {
-        // Impactful: If investigating and close to player, catch them
-        if (shapeData.type == ShapeType.Hexagon)
-        {
-            GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-            if (playerObj != null)
-            {
-                float distToPlayer = Vector2.Distance(transform.position, playerObj.transform.position);
-                if (distToPlayer < 1.5f)
-                {
-                    Debug.Log("Guard caught the player!");
-                    UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
-                }
-            }
-        }
-    }
-
-    void CheckForDeadBodies()
-    {
-        Collider2D[] hitColliders = Physics2D.OverlapCircleAll(transform.position, visionRange);
-        foreach (var hitCollider in hitColliders)
-        {
-            var sv = hitCollider.GetComponent<ShapeVisualizer>();
-            if (sv != null && sv.shapeData != null && sv.shapeData.type == ShapeType.Husk)
-            {
-                PanicAndFindGuard(hitCollider.transform.position);
-                break;
-            }
-        }
-    }
-
-    void PanicAndFindGuard(Vector3 bodyTarget)
-    {
-        Debug.Log($"[NPC] {gameObject.name} ({shapeData.type}) viu um corpo (Husk)!");
-
-        // Se for um guarda, dispara o alarme geral imediatamente
-        if (shapeData.type == ShapeType.Hexagon)
-        {
-            var suspicion = GetComponentInChildren<SuspicionDetector>();
-            if (suspicion != null)
-            {
-                suspicion.RaiseGlobalAlarm();
-            }
-            InvestigatePosition(bodyTarget);
-            return;
-        }
-
-        if (nav != null) nav.StopJourney();
-        ReleaseCurrentInterestPoint();
-        currentState = NPCState.CallingGuard;
-        
-        ControllerNPC nearestGuard = null;
-        float minDistance = float.MaxValue;
-        
-        var allNPCs = FindObjectsByType<ControllerNPC>(FindObjectsSortMode.None);
-        foreach (var npc in allNPCs)
-        {
-            if (npc.shapeData != null && npc.shapeData.type == ShapeType.Hexagon)
-            {
-                float dist = Vector2.Distance(transform.position, npc.transform.position);
-                if (dist < minDistance)
-                {
-                    minDistance = dist;
-                    nearestGuard = npc;
-                }
-            }
-        }
-
-        if (nearestGuard != null && nav != null)
-        {
-            // Foge para o guarda a pedir ajuda
-            nav.StartJourney(nearestGuard.transform.position, HumanNavigation.MovementProfile.Urgent, () =>
-            {
-                Debug.Log($"[NPC] {gameObject.name} alertou o guarda {nearestGuard.name}!");
-                nearestGuard.InvestigatePosition(bodyTarget);
-                EnterIdle(3f); // Pausa depois de alertar antes de voltar ao normal
-            });
-        }
-        else
-        {
-            // Não há guardas, então fica apenas em pânico no sítio
-            EnterIdle(3f);
+            case NPCState.Returning:     /* gerido por callback */ break;
+            case NPCState.CallingGuard:  /* gerido por callback */ break;
+            case NPCState.Dead:         EnsureIsDead(); break;
         }
     }
 
     // ──────────────────────────────────────────────────────────────────────────
     // State handlers
     // ──────────────────────────────────────────────────────────────────────────
+
+    void EnsureIsDead()
+    {
+        if (currentState == NPCState.Dead)
+        {
+            currentState = NPCState.Dead;
+            nav.StopJourney();
+            ReleaseCurrentInterestPoint();
+        }
+    }
 
     void UpdateIdle()
     {
@@ -285,19 +210,10 @@ public class ControllerNPC : MonoBehaviour
             FinishActivity();
     }
 
-    /// <summary>
-    /// Patrulha procedural: percorre a lista de pontos gerados
-    /// com perfil Guard. Cada chegada agenda o próximo ponto.
-    /// </summary>
     void UpdatePatrolling()
     {
-        if (patrolRoute.Count == 0)
-        {
-            EnterIdle();
-            return;
-        }
+        if (patrolRoute.Count == 0) { EnterIdle(); return; }
 
-        // Só lança movimento se não estiver já em trânsito
         if (!nav.IsMoving)
         {
             Vector3 nextPoint = patrolRoute[patrolIndex];
@@ -305,42 +221,95 @@ public class ControllerNPC : MonoBehaviour
 
             nav.StartJourney(nextPoint, HumanNavigation.MovementProfile.Guard, () =>
             {
-                // Pequena pausa de sentinela antes de avançar
                 EnterIdle(Random.Range(1.5f, 4f));
             });
         }
     }
 
-    /// <summary>Guarda estático: roda lentamente de um lado para o outro no posto.</summary>
     void UpdateWatching()
     {
         lookTimer -= Time.deltaTime;
         if (lookTimer <= 0f)
         {
-            lookDir    = -lookDir; // alterna esquerda/direita
-            lookTimer  = stationaryLookInterval + Random.Range(-0.5f, 0.5f);
-            float targetAngle = lookDir * stationaryLookAngle;
-            StartCoroutine(SmoothRotateToAngle(targetAngle, stationaryLookInterval * 0.6f));
+            lookDir   = -lookDir;
+            lookTimer = stationaryLookInterval + Random.Range(-0.5f, 0.5f);
+            StartCoroutine(SmoothRotateToAngle(lookDir * stationaryLookAngle, stationaryLookInterval * 0.6f));
         }
     }
 
-    IEnumerator SmoothRotateToAngle(float angleDeg, float duration)
+    void UpdateInvestigating()
     {
-        Quaternion from = transform.rotation;
-        // Em 2D rotação no eixo Z a partir da rotação base (homeRotation)
-        Quaternion to   = Quaternion.Euler(0f, 0f, angleDeg);
-        float elapsed   = 0f;
+        if (shapeData.type != ShapeType.Hexagon) return;
 
-        while (elapsed < duration)
+        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+        if (playerObj != null && Vector2.Distance(transform.position, playerObj.transform.position) < 1.5f)
         {
-            transform.rotation = Quaternion.Slerp(from, to, elapsed / duration);
-            elapsed += Time.deltaTime;
-            yield return null;
+            Debug.Log("Guard caught the player!");
+            UnityEngine.SceneManagement.SceneManager.LoadScene(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
         }
-        transform.rotation = to;
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // Dead body detection
+    // ──────────────────────────────────────────────────────────────────────────
 
+    void CheckForDeadBodies()
+    {
+        Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, visionRange);
+        foreach (var hit in hits)
+        {
+            var sv = hit.GetComponent<ShapeVisualizer>();
+            if (sv != null && sv.shapeData != null && sv.shapeData.type == ShapeType.Husk)
+            {
+                PanicAndFindGuard(hit.transform.position);
+                break;
+            }
+        }
+    }
+
+    void PanicAndFindGuard(Vector3 bodyPosition)
+    {
+        Debug.Log($"[NPC] {gameObject.name} ({shapeData.type}) viu um corpo!");
+
+        if (shapeData.type == ShapeType.Hexagon)
+        {
+            GetComponentInChildren<SuspicionDetector>()?.RaiseGlobalAlarm();
+            InvestigatePosition(bodyPosition);
+            return;
+        }
+
+        nav.StopJourney();
+        ReleaseCurrentInterestPoint();
+        currentState = NPCState.CallingGuard;
+
+        ControllerNPC nearestGuard = null;
+        float minDist = float.MaxValue;
+        foreach (var npc in FindObjectsByType<ControllerNPC>(FindObjectsSortMode.None))
+        {
+            if (npc.shapeData?.type != ShapeType.Hexagon) continue;
+            float d = Vector2.Distance(transform.position, npc.transform.position);
+            if (d < minDist) { minDist = d; nearestGuard = npc; }
+        }
+
+        if (nearestGuard != null)
+        {
+            nav.StartJourney(nearestGuard.transform.position, HumanNavigation.MovementProfile.Urgent, () =>
+            {
+                Debug.Log($"[NPC] {gameObject.name} alertou {nearestGuard.name}!");
+                nearestGuard.InvestigatePosition(bodyPosition);
+                EnterIdle(3f);
+            });
+        }
+        else
+        {
+            EnterIdle(3f);
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Decision coroutine
+    // ──────────────────────────────────────────────────────────────────────────
 
     IEnumerator DecideNextBehavior()
     {
@@ -357,51 +326,99 @@ public class ControllerNPC : MonoBehaviour
         isDeciding = false;
     }
 
-    // ── Circle (Convidado) ────────────────────────────────────────────────────
+    // ── Circle (Convidado de festa) ───────────────────────────────────────────
+    // Passeia de um lado para o outro, para a conversar, bebe, admira coisas.
     void DecideCircle()
     {
         float roll = Random.value;
 
-        if      (roll < 0.30f) TryGoToInterestPoint(InterestPoint.PointType.Painting,   HumanNavigation.MovementProfile.Casual);
-        else if (roll < 0.50f) TryGoToInterestPoint(InterestPoint.PointType.DrinkTable, HumanNavigation.MovementProfile.Casual);
-        else if (roll < 0.65f) TryGoToInterestPoint(InterestPoint.PointType.SocialArea, HumanNavigation.MovementProfile.Casual);
-        else if (roll < 0.80f) WalkToRandomNearby(5f, HumanNavigation.MovementProfile.Casual);
-        else                   EnterIdle(Random.Range(4f, 10f)); // fica a conversar
+        if (roll < 0.25f)
+        {
+            WalkToRandomNearby(5f, HumanNavigation.MovementProfile.Casual);
+        }
+        else if (roll < 0.45f)
+        {
+            if (!TryGoToInterestPoint(InterestPoint.PointType.DrinkTable, HumanNavigation.MovementProfile.Casual))
+                WalkToRandomNearby(4f, HumanNavigation.MovementProfile.Casual);
+        }
+        else if (roll < 0.60f)
+        {
+            if (!TryGoToInterestPoint(InterestPoint.PointType.Painting, HumanNavigation.MovementProfile.Casual))
+                EnterIdle(Random.Range(3f, 7f));
+        }
+        else if (roll < 0.75f)
+        {
+            if (!TryGoToInterestPoint(InterestPoint.PointType.SocialArea, HumanNavigation.MovementProfile.Casual))
+                WalkToRandomNearby(3f, HumanNavigation.MovementProfile.Casual);
+        }
+        else
+        {
+            EnterIdle(Random.Range(5f, 12f));
+        }
     }
 
     // ── Hexagon (Segurança) ───────────────────────────────────────────────────
+    // Estático: fica no posto a vigiar. Patrulha: rondas na área.
     void DecideHexagon()
     {
-        if (isStationary)
-            currentState = NPCState.Watching;
-        else
-            currentState = NPCState.Patrolling;
+        currentState = isStationary ? NPCState.Watching : NPCState.Patrolling;
     }
 
     // ── Triangle (VIP) ────────────────────────────────────────────────────────
+    // Mais vigilante, zonas restritas, muito tempo parado.
     void DecideTriangle()
     {
         float roll = Random.value;
 
-        if      (roll < 0.35f)
+        if (roll < 0.30f)
         {
             if (!TryGoToInterestPoint(InterestPoint.PointType.PrivateRoom, HumanNavigation.MovementProfile.Purposeful))
                 TryGoToInterestPoint(InterestPoint.PointType.Seating, HumanNavigation.MovementProfile.Purposeful);
         }
-        else if (roll < 0.55f) TryGoToInterestPoint(InterestPoint.PointType.SocialArea, HumanNavigation.MovementProfile.Purposeful);
-        else if (roll < 0.70f) TryGoToInterestPoint(InterestPoint.PointType.DrinkTable, HumanNavigation.MovementProfile.Purposeful);
-        else if (roll < 0.80f) TryGoToInterestPoint(InterestPoint.PointType.Painting,   HumanNavigation.MovementProfile.Purposeful);
-        else                   EnterIdle(Random.Range(8f, 20f)); // VIPs não se apressam
+        else if (roll < 0.50f)
+        {
+            EnterIdle(Random.Range(10f, 25f));
+        }
+        else if (roll < 0.65f)
+        {
+            WalkToRandomNearby(4f, HumanNavigation.MovementProfile.Purposeful);
+        }
+        else if (roll < 0.78f)
+        {
+            if (!TryGoToInterestPoint(InterestPoint.PointType.SocialArea, HumanNavigation.MovementProfile.Purposeful))
+                EnterIdle(Random.Range(8f, 15f));
+        }
+        else if (roll < 0.88f)
+        {
+            if (!TryGoToInterestPoint(InterestPoint.PointType.DrinkTable, HumanNavigation.MovementProfile.Purposeful))
+                EnterIdle(Random.Range(5f, 10f));
+        }
+        else
+        {
+            if (!TryGoToInterestPoint(InterestPoint.PointType.Painting, HumanNavigation.MovementProfile.Purposeful))
+                EnterIdle(Random.Range(5f, 10f));
+        }
     }
 
-    // ── Square (Staff) ────────────────────────────────────────────────────────
+    // ── Square (Funcionário) ──────────────────────────────────────────────────
+    // Maioritariamente no posto a "atender", circula raramente.
     void DecideSquare()
     {
         float roll = Random.value;
 
-        if      (roll < 0.30f) EnterIdle(Random.Range(2f, 5f)); // Menos tempo parado
-        else if (roll < 0.70f) WalkToRandomNearby(6f, HumanNavigation.MovementProfile.Worker); // Mais movimento
-        else                   TryGoToInterestPoint(InterestPoint.PointType.DrinkTable, HumanNavigation.MovementProfile.Worker);
+        if (roll < 0.70f)
+        {
+            EnterIdle(Random.Range(8f, 20f));
+        }
+        else if (roll < 0.88f)
+        {
+            WalkToRandomNearby(3f, HumanNavigation.MovementProfile.Worker);
+        }
+        else
+        {
+            if (!TryGoToInterestPoint(InterestPoint.PointType.DrinkTable, HumanNavigation.MovementProfile.Worker))
+                EnterIdle(Random.Range(5f, 12f));
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -421,10 +438,7 @@ public class ControllerNPC : MonoBehaviour
 
         if (candidates.Count == 0) return false;
 
-        // Peso por distância — pontos mais perto têm mais probabilidade
-        // (evita que todos os NPCs vão sempre ao mesmo sítio)
-        InterestPoint chosen = PickWeightedByDistance(candidates);
-
+        InterestPoint chosen = candidates[Random.Range(0, candidates.Count)];
         ReleaseCurrentInterestPoint();
         if (!chosen.Occupy()) return false;
 
@@ -434,7 +448,6 @@ public class ControllerNPC : MonoBehaviour
         Vector3 destination = chosen.transform.position;
         if (chosen.maxOccupants > 1)
         {
-            // Adicionar um pequeno desvio para que não se sobreponham no mesmo Vector3
             Vector2 offset = Random.insideUnitCircle * 0.8f;
             destination += new Vector3(offset.x, offset.y, 0f);
         }
@@ -447,12 +460,10 @@ public class ControllerNPC : MonoBehaviour
     {
         ReleaseCurrentInterestPoint();
 
-        Vector3 randomDir = Random.insideUnitCircle;
-        // 2D — offset no plano XY
-        Vector3 offset    = new Vector3(randomDir.x, randomDir.y, 0f) * radius;
-        Vector3 candidate = transform.position + offset;
+        Vector2 randomDir = Random.insideUnitCircle;
+        Vector3 candidate = transform.position + new Vector3(randomDir.x, randomDir.y, 0f) * radius;
 
-        Vector3 dest = homePosition; // fallback
+        Vector3 dest = homePosition;
         if (NavMesh.SamplePosition(candidate, out NavMeshHit hit, radius, NavMesh.AllAreas))
             dest = hit.position;
 
@@ -465,7 +476,7 @@ public class ControllerNPC : MonoBehaviour
         ReleaseCurrentInterestPoint();
         currentState = NPCState.Returning;
 
-        HumanNavigation.MovementProfile profile = shapeData.type == ShapeType.Hexagon
+        var profile = shapeData.type == ShapeType.Hexagon
             ? HumanNavigation.MovementProfile.Guard
             : HumanNavigation.MovementProfile.Purposeful;
 
@@ -487,7 +498,6 @@ public class ControllerNPC : MonoBehaviour
     {
         if (currentInterestPoint == null) { EnterIdle(); return; }
 
-        // Rotação suave para o ponto de interesse
         if (currentInterestPoint.facingDirection != Vector3.zero)
             StartCoroutine(SmoothFace(currentInterestPoint.facingDirection));
 
@@ -505,7 +515,7 @@ public class ControllerNPC : MonoBehaviour
         float maxT = maxActivityTime;
 
         if (shapeData.type == ShapeType.Triangle) { minT *= 2f; maxT *= 3f; }
-        if (shapeData.type == ShapeType.Hexagon)  { minT = 1f; maxT = 3f; }
+        if (shapeData.type == ShapeType.Hexagon)  { minT = 1f;  maxT = 3f; }
 
         stateTimer   = Random.Range(minT, maxT);
         currentState = activityState;
@@ -523,7 +533,7 @@ public class ControllerNPC : MonoBehaviour
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Patrol generation — cria rota circular no NavMesh em torno do posto
+    // Patrol generation
     // ──────────────────────────────────────────────────────────────────────────
 
     void GeneratePatrolRoute()
@@ -532,12 +542,10 @@ public class ControllerNPC : MonoBehaviour
 
         for (int i = 0; i < patrolPointCount; i++)
         {
-            // Distribui ângulos uniformemente + pequeno jitter
-            float angle     = (360f / patrolPointCount) * i + Random.Range(-15f, 15f);
-            float distance  = Random.Range(patrolRadius * 0.5f, patrolRadius);
-            float rad       = angle * Mathf.Deg2Rad;
+            float angle    = (360f / patrolPointCount) * i + Random.Range(-15f, 15f);
+            float distance = Random.Range(patrolRadius * 0.5f, patrolRadius);
+            float rad      = angle * Mathf.Deg2Rad;
 
-            // 2D — movimento no plano XY, não XZ
             Vector3 candidate = homePosition + new Vector3(
                 Mathf.Cos(rad) * distance,
                 Mathf.Sin(rad) * distance,
@@ -548,11 +556,9 @@ public class ControllerNPC : MonoBehaviour
                 patrolRoute.Add(hit.position);
         }
 
-        // Se não conseguiu nenhum ponto, usa só a posição inicial
         if (patrolRoute.Count == 0)
             patrolRoute.Add(homePosition);
 
-        // Começa num ponto aleatório da rota (evita todos saírem do mesmo lado)
         patrolIndex = Random.Range(0, patrolRoute.Count);
     }
 
@@ -560,12 +566,12 @@ public class ControllerNPC : MonoBehaviour
     // Public API
     // ──────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Envia um Hexagon investigar uma posição. Pode ser chamado externamente.</summary>
+    /// <summary>Envia este guarda investigar uma posição. Só funciona em Hexagon.</summary>
     public void InvestigatePosition(Vector3 position)
     {
         if (shapeData.type != ShapeType.Hexagon)
         {
-            Debug.Log($"[NPC] {gameObject.name} ignorou InvestigatePosition — não é Hexagon (é {shapeData.type})");
+            Debug.Log($"[NPC] {gameObject.name} ignorou InvestigatePosition — não é Hexagon ({shapeData.type})");
             return;
         }
 
@@ -585,24 +591,17 @@ public class ControllerNPC : MonoBehaviour
     /// <summary>Alerta genérico — delega para InvestigatePosition se for segurança.</summary>
     public void Alert(Vector3 incidentPosition) => InvestigatePosition(incidentPosition);
 
-    /// <summary>Forces this NPC to go to a specific position and perform an action.</summary>
+    /// <summary>Envia este NPC para uma posição e executa uma ação ao chegar.</summary>
     public void GoDoTask(Vector3 position, System.Action onArrived)
     {
         nav.StopJourney();
         ReleaseCurrentInterestPoint();
         currentState = NPCState.Walking;
-
-        nav.StartJourney(position, HumanNavigation.MovementProfile.Worker, () =>
-        {
-            onArrived?.Invoke();
-        });
+        nav.StartJourney(position, HumanNavigation.MovementProfile.Worker, onArrived);
     }
 
-    /// <summary>Resumes normal behavior after a task.</summary>
-    public void ResumeNormalBehavior()
-    {
-        ReturnHome();
-    }
+    /// <summary>Retoma comportamento normal após uma tarefa externa.</summary>
+    public void ResumeNormalBehavior() => ReturnHome();
 
     // ──────────────────────────────────────────────────────────────────────────
     // Helpers
@@ -621,23 +620,30 @@ public class ControllerNPC : MonoBehaviour
         currentInterestPoint = null;
     }
 
-    /// <summary>Escolhe um InterestPoint aleatoriamente para evitar que se juntem todos no mesmo lado.</summary>
-    InterestPoint PickWeightedByDistance(List<InterestPoint> candidates)
+    IEnumerator SmoothRotateToAngle(float angleDeg, float duration)
     {
-        // Alterado de "peso por distância" para puramente aleatório para evitar a formação de "aglomerados" artificiais
-        if (candidates == null || candidates.Count == 0) return null;
-        return candidates[Random.Range(0, candidates.Count)];
+        Quaternion from = transform.rotation;
+        // RELATIVO à rotação do spawn — o guarda olha X graus para o lado
+        // a partir da direção em que estava virado quando foi colocado na cena
+        Quaternion to   = homeRotation * Quaternion.Euler(0f, 0f, angleDeg);
+        float elapsed   = 0f;
+
+        while (elapsed < duration)
+        {
+            transform.rotation = Quaternion.Slerp(from, to, elapsed / duration);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+        transform.rotation = to;
     }
 
     IEnumerator SmoothFace(Vector3 direction)
     {
-        float elapsed  = 0f;
-        float duration = 0.5f;
+        float elapsed   = 0f;
+        float duration  = 0.5f;
         Quaternion from = transform.rotation;
-
-        // Em 2D a rotação é no eixo Z
-        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-        Quaternion to = Quaternion.Euler(0f, 0f, angle);
+        float angle     = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+        Quaternion to   = Quaternion.Euler(0f, 0f, angle);
 
         while (elapsed < duration)
         {
@@ -654,15 +660,12 @@ public class ControllerNPC : MonoBehaviour
 
     void OnDrawGizmos()
     {
-        // Posto / home
         Gizmos.color = Color.green;
         Gizmos.DrawWireSphere(homePosition, 0.4f);
 
-        // Visão
         Gizmos.color = new Color(1f, 0.2f, 0.2f, 0.15f);
         Gizmos.DrawWireSphere(transform.position, visionRange);
 
-        // Rota de patrulha (Hexagon)
         if (patrolRoute != null && patrolRoute.Count > 1)
         {
             Gizmos.color = new Color(1f, 0.6f, 0f, 0.6f);
@@ -675,14 +678,12 @@ public class ControllerNPC : MonoBehaviour
             }
         }
 
-        // Raio de patrulha
         if (shapeData != null && shapeData.type == ShapeType.Hexagon)
         {
             Gizmos.color = new Color(1f, 0.6f, 0f, 0.1f);
             Gizmos.DrawWireSphere(homePosition, patrolRadius);
         }
 
-        // Label de estado
         #if UNITY_EDITOR
         UnityEditor.Handles.Label(
             transform.position + Vector3.up * 1.4f,

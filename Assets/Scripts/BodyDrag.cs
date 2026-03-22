@@ -11,6 +11,7 @@ public class BodyDrag : MonoBehaviour
     [SerializeField]private Transform _dragPoint;
     private GameObject _draggedBody = null;
     private Collider2D _draggedCollider = null;
+    [SerializeField] private float tooltipRange = 2.0f;
 
     void Awake()
     {
@@ -19,6 +20,26 @@ public class BodyDrag : MonoBehaviour
 
     void Update()
     {
+        GameObject closestBody = null;
+        float minDistance = tooltipRange;
+
+        foreach (GameObject body in GameObject.FindGameObjectsWithTag("Draggable"))
+        {
+            float distance = Vector3.Distance(transform.position, body.transform.position);
+            if (distance < minDistance)
+            {
+                minDistance = distance;
+                closestBody = body;
+            }
+        }
+        if (closestBody != null)
+        {
+            TooltipManager.Instance.ShowTooltip("Hold F to Drag\n (Tip: Hide them in a dumpster)", closestBody.transform.position);
+        }
+        else
+        {
+            TooltipManager.Instance.HideTooltip();
+        }
         //hold input to drag body, release to drop
         if (input.DragInput)
         {

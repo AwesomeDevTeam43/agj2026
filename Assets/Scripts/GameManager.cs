@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using TMPro;
+using UnityEngine.UI;
 
 public class GameManager : MonoBehaviour
 {
@@ -20,6 +21,9 @@ public class GameManager : MonoBehaviour
     
     [SerializeField] private string checkBox = "[X]";
     [SerializeField] private string uncheckBox = "[ ]";
+
+    [Header("Suspicion Bar")]
+    [SerializeField] private Slider _suspicionBar;
 
     private bool _isGameOver = false;
 

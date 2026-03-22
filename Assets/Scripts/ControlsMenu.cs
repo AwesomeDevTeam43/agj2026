@@ -17,7 +17,7 @@ public class ControlsMenu : MonoBehaviour
     [SerializeField] private Button mapTabButton;
 
     [Header("Tab Colors")]
-    [SerializeField] private Color tabActiveColor   = new Color(1f, 1f, 1f, 0.4f);
+    [SerializeField] private Color tabActiveColor = new Color(1f, 1f, 1f, 0.4f);
     [SerializeField] private Color tabInactiveColor = new Color(0.3f, 0.3f, 0.3f, 0.3f);
 
     [Header("Input")]
@@ -55,7 +55,7 @@ public class ControlsMenu : MonoBehaviour
         bool isActive = controlsPanel.activeSelf;
         controlsPanel.SetActive(!isActive);
 
-        // Pausa o jogo quando o menu está aberto
+        // Só pausa se o GameManager não tiver pausado por outro motivo
         Time.timeScale = isActive ? 1f : 0f;
 
         if (objectiveText != null)
@@ -65,25 +65,31 @@ public class ControlsMenu : MonoBehaviour
             ShowControls();
     }
 
+    private void OnDestroy()
+    {
+        // Garante que o timeScale volta ao normal se o objeto for destruído com o menu aberto
+        Time.timeScale = 1f;
+    }
+
     // ── Públicos — liga no Inspector dos botões ───────────────────────────────
 
     public void ShowControls()
     {
         if (controlsText != null) controlsText.SetActive(true);
-        if (mapImage != null)     mapImage.SetActive(false);
+        if (mapImage != null) mapImage.SetActive(false);
 
         SetTabButtonColor(controlsTabButton, true);
-        SetTabButtonColor(mapTabButton,      false);
+        SetTabButtonColor(mapTabButton, false);
     }
 
     public void ShowMap()
-    {
-        if (controlsText != null) controlsText.SetActive(false);
-        if (mapImage != null)     mapImage.SetActive(true);
-
-        SetTabButtonColor(controlsTabButton, false);
-        SetTabButtonColor(mapTabButton,      true);
-    }
+{
+    Debug.Log($"[CM] ShowMap | mapImage={mapImage?.name ?? "NULL"}");
+    if (controlsText != null) controlsText.SetActive(false);
+    if (mapImage != null)     mapImage.SetActive(true);
+    SetTabButtonColor(controlsTabButton, false);
+    SetTabButtonColor(mapTabButton,      true);
+}
 
     // ──────────────────────────────────────────────────────────────────────────
 

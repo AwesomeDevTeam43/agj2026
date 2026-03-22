@@ -81,7 +81,7 @@ public class EletricPanel : MonoBehaviour, IInteractable
 
         foreach (ControllerNPC npc in allNPCs)
         {
-            if (npc.shapeData != null && (npc.shapeData.type == ShapeType.Triangle || npc.shapeData.type == ShapeType.Square))
+            if (npc.shapeData != null && (npc.shapeData.type == ShapeType.Hexagon || npc.shapeData.type == ShapeType.Square))
             {
                 float distance = Vector2.Distance(transform.position, npc.transform.position);
                 if (distance < closestDistance)
@@ -99,7 +99,7 @@ public class EletricPanel : MonoBehaviour, IInteractable
         }
         else
         {
-            Debug.LogWarning("No Triangle or Square NPCs found to fix the electric panel!");
+            Debug.LogWarning("No Hexagon or Square NPCs found to fix the electric panel!");
         }
     }
 

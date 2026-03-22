@@ -90,6 +90,7 @@ public class HumanNavigation : MonoBehaviour
     private NavMeshAgent        agent;
     private Coroutine           journeyCoroutine;
     private float               baseSpeed;
+    private float               currentProfileSpeedModifier; 
     private float               noiseOffset;        // offset único por NPC no Perlin
 
     // Perfil ativo — ajusta os parâmetros em runtime
@@ -118,12 +119,51 @@ public class HumanNavigation : MonoBehaviour
     /// Inicia uma viagem até <destination> com o perfil dado.
     /// Quando chegar (ou se já lá estiver), invoca <onArrived>.
     /// </summary>
+    /// 
+    public bool IsTargetInVisionCone(Transform target, float fovAngle, float maxRange)
+    {
+        if (target == null) return false;
+
+        Vector2 dirToTarget = target.position - transform.position;
+        
+        // 1. DISTANCE CHECK (OverlapCircle equivalent, but faster for single targets)
+        if (dirToTarget.magnitude > maxRange) return false;
+
+        // 2. ANGLE CHECK (Are they in the cone?)
+        // fovAngle / 2 because if FOV is 90, we check 45 degrees to the left and 45 to the right
+        if (Vector2.Angle(transform.right, dirToTarget.normalized) > fovAngle / 2f)
+        {
+            return false; 
+        }
+
+        // 3. WALL CHECK (Line of Sight)
+        // This shoots a ray through triggers, stopping only at solid objects
+        RaycastHit2D[] hits = Physics2D.RaycastAll(transform.position, dirToTarget.normalized, maxRange);
+        
+        foreach (var hit in hits)
+        {
+            if (hit.collider.gameObject == gameObject) continue; // Ignore self
+            if (hit.collider.isTrigger) continue;                // Ignore triggers (zones, etc)
+            
+            if (hit.collider.transform == target) 
+            {
+                return true; // We clearly saw the target!
+            }
+
+            // If we hit anything solid that ISN'T the target, a wall blocked our vision
+            Debug.DrawLine(transform.position, hit.point, Color.yellow, 0.1f); // Debug line for walls
+            return false; 
+        }
+
+        return false;
+    }
     public void StartJourney(Vector3 destination, MovementProfile profile, System.Action onArrived = null)
     {
         StopJourney();
         activeProfile    = profile;
         onArrivedCallback = onArrived;
-        baseSpeed        = agent.speed;
+        if (baseSpeed == 0) baseSpeed        = agent.speed;
+        currentProfileSpeedModifier = 1f; // reset any previous profile modifiers
 
         ApplyProfileDefaults(profile);
 
@@ -151,7 +191,8 @@ public class HumanNavigation : MonoBehaviour
             agent.ResetPath();
         }
         
-        agent.speed = baseSpeed > 0 ? baseSpeed : agent.speed;
+        //agent.speed = baseSpeed > 0 ? baseSpeed : agent.speed;
+        if (baseSpeed > 0f) agent.speed = baseSpeed;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -215,7 +256,7 @@ public class HumanNavigation : MonoBehaviour
             // Velocidade orgânica via Perlin noise
             float noise     = Mathf.PerlinNoise(Time.time * speedNoiseFrequency + noiseOffset, 0f);
             float speedMult = 1f + (noise - 0.5f) * 2f * speedNoiseAmplitude;
-            agent.speed     = baseSpeed * Mathf.Clamp(speedMult, 0.5f, 1.5f);
+            agent.speed     = baseSpeed * currentProfileSpeedModifier* Mathf.Clamp(speedMult, 0.5f, 1.5f);
 
             // Rotação na direção do movimento — funciona em 2D (eixo Z)
             Vector2 velocity = new Vector2(agent.velocity.x, agent.velocity.y);
@@ -408,7 +449,7 @@ public class HumanNavigation : MonoBehaviour
                 speedNoiseAmplitude    = 0.05f;
                 micropauseProbability  = 0f;
                 lookAroundOnPause      = false;
-                agent.speed           *= 1.8f;     // aumenta velocidade
+                currentProfileSpeedModifier = 1.5f; // ligeira corrida
                 break;
         }
     }

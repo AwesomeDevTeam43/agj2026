@@ -269,15 +269,31 @@ public class Test : MonoBehaviour, IInteractable
             gameObject.tag = "Draggable";
             _isStealing = false;
 
+
             if (killHistory.Count >= killThreshold)
             {
                 Debug.Log("Kill threshold exceeded, maxing out suspicion!");
                 suspicionDetector.RaiseGlobalAlarm();
             }
-            // Disable NPC logic so it stops moving
-            var controller = GetComponent<ControllerNPC>();
-            if (controller != null) controller.enabled = false;
 
+            var nav = GetComponent<HumanNavigation>();
+            if (nav != null) nav.enabled = false;
+
+            var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (agent != null) agent.enabled = false;
+
+            var controller = GetComponent<ControllerNPC>();
+            if (controller != null) {
+                controller.currentState = ControllerNPC.NPCState.Dead;
+                controller.enabled = false;
+
+            }
+            if (suspicionDetector != null) {suspicionDetector.ForceDisable();}
+            else
+            {
+                var sd = GetComponentInChildren<SuspicionDetector>();
+                if (sd != null) sd.ForceDisable();
+            }
             gameObject.tag = "Draggable";
             _isStealing = false;
             CancelSteal();
@@ -289,6 +305,7 @@ public class Test : MonoBehaviour, IInteractable
             yield break;
         }
     }
+    
 
     private void OnDrawGizmos()
     {

@@ -5,24 +5,22 @@ using UnityEngine;
 /// <summary>
 /// SuspicionDetector — Vive no VisionCone (filho do guarda).
 ///
-/// Avalia o contexto do que o guarda vê e aumenta/diminui suspicion
-/// consoante várias condições:
-///   - Shape do player não permitido na zona
-///   - Player a mover-se demasiado rápido
-///   - Player parado demasiado tempo num local suspeito
-///
-/// Hierarquia esperada:
-///   Guarda (ControllerNPC)
-///   └── VisionCone (este GameObject)
-///       ├── PolygonCollider2D (trigger)
-///       └── SuspicionDetector
+/// Avalia o contexto do que o guarda vê (usando Field of View matemático em vez de triggers)
+/// e aumenta/diminui suspicion consoante várias condições.
 /// </summary>
-[RequireComponent(typeof(PolygonCollider2D))]
 public class SuspicionDetector : MonoBehaviour
 {
     // ──────────────────────────────────────────────────────────────────────────
     // Inspector
     // ──────────────────────────────────────────────────────────────────────────
+
+    [Header("FOV Settings")]
+    [Tooltip("Distância máxima de visão")]
+    public float visionRange = 6f;
+    
+    [Tooltip("Ângulo total do cone de visão (ex: 90 = 45º para cada lado)")]
+    [Range(10f, 360f)]
+    public float visionAngle = 90f;
 
     [Header("Zone Rules")]
     [Tooltip("Shapes permitidos nesta zona. Vazio = ninguém é suspeito por shape.")]
@@ -65,15 +63,19 @@ public class SuspicionDetector : MonoBehaviour
 
     private float       _currentSuspicion   = 0f;
     private bool        _playerInCone       = false;
-    private float       _loiterTimer        = 0f;   // tempo que o player está parado no cone
+    private float       _loiterTimer        = 0f;   
 
-    private Coroutine   _raiseRoutine;
     private Coroutine   _reduceRoutine;
 
     // Referências
-    private ControllerNPC       _guardNPC;      // guarda pai
-    private PlayerController    _player;        // player detectado
-    private Rigidbody2D         _playerRb;      // para ler velocidade
+    private ControllerNPC       _guardNPC;      
+    private Transform           _playerTransform;
+    private PlayerController    _playerController;
+    private ShapeVisualizer     _playerVisualizer;
+    private Rigidbody2D         _playerRb;      
+
+    private static Texture2D _bgTexture;
+    private static Texture2D _fillTexture;
 
     // ──────────────────────────────────────────────────────────────────────────
     // Init
@@ -81,119 +83,165 @@ public class SuspicionDetector : MonoBehaviour
 
     void Awake()
     {
-        // Sobe na hierarquia para encontrar o ControllerNPC do guarda pai
         _guardNPC = GetComponentInParent<ControllerNPC>();
 
         if (_guardNPC == null)
             Debug.LogWarning($"[SuspicionDetector] {gameObject.name}: não encontrou ControllerNPC no pai!");
 
-        // Garante que o collider é trigger
-        var col = GetComponent<PolygonCollider2D>();
-        col.isTrigger = true;
+        // Remove the PolygonCollider2D if one still exists on this object to prevent physics overhead
+        var oldCollider = GetComponent<PolygonCollider2D>();
+        if (oldCollider != null)
+        {
+            Destroy(oldCollider);
+        }
+    }
+
+    void Start()
+    {
+        GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
+        if (playerObj != null)
+        {
+            _playerTransform = playerObj.transform;
+            _playerController = playerObj.GetComponent<PlayerController>();
+            _playerVisualizer = playerObj.GetComponent<ShapeVisualizer>();
+            _playerRb = playerObj.GetComponent<Rigidbody2D>();
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Update — avalia contexto enquanto o player está no cone
+    // Update — avalia o FOV matemático todos os frames
     // ──────────────────────────────────────────────────────────────────────────
 
     void Update()
     {
-        if (!_playerInCone || _player == null) return;
+        if (_playerTransform == null) return;
 
-        // Acumula loiter timer se o player estiver quase parado
-        if (_playerRb != null && _playerRb.linearVelocity.magnitude < 0.5f)
-            _loiterTimer += Time.deltaTime;
-        else
+        // --- THE ZOMBIE FIX ---
+        // Se o guarda estiver morto ou transformado num Husk, desliga a suspeita e limpa a UI!
+        if (_guardNPC != null)
+        {
+            if (_guardNPC.currentState == ControllerNPC.NPCState.Dead || 
+               (_guardNPC.shapeData != null && _guardNPC.shapeData.type == ShapeType.Husk))
+            {
+                _currentSuspicion = 0f; // Zera a barra para ela desaparecer da UI
+                return;                 // Aborta o Update para que ele não veja mais nada
+            }
+        }
+        // ----------------------
+
+        bool isCurrentlyInFOV = IsPlayerInFOV();
+
+        // 1. STATE CHANGE: Player acabou de entrar na visão
+        if (isCurrentlyInFOV && !_playerInCone)
+        {
+            _playerInCone = true;
             _loiterTimer = 0f;
+            
+            if (_reduceRoutine != null)
+            {
+                StopCoroutine(_reduceRoutine);
+                _reduceRoutine = null;
+            }
+            if (showDebugLog) Debug.Log($"[SuspicionDetector] Player entrou na visão matemática!");
+        }
+        // 2. STATE CHANGE: Player acabou de sair da visão
+        else if (!isCurrentlyInFOV && _playerInCone)
+        {
+            _playerInCone = false;
+            _loiterTimer = 0f;
+            _reduceRoutine = StartCoroutine(ReduceSuspicionRoutine());
+            if (showDebugLog) Debug.Log($"[SuspicionDetector] Player saiu da visão matemática.");
+        }
+
+        // 3. CONTINUOUS LOGIC: Enquanto o player está na visão
+        if (_playerInCone)
+        {
+            // Acumula loiter timer se estiver quase parado
+            if (_playerRb != null && _playerRb.linearVelocity.magnitude < 0.5f)
+                _loiterTimer += Time.deltaTime;
+            else
+                _loiterTimer = 0f;
+
+            EvaluateAndApplySuspicion();
+        }
+    }
+    public void ForceDisable()
+    {
+        _currentSuspicion = 0f; // Instantly zero out the math
+        this.enabled = false;   // Unity instantly stops Update() and OnGUI()!
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Trigger events
+    // Field of View Core Logic
     // ──────────────────────────────────────────────────────────────────────────
 
-    void OnTriggerEnter2D(Collider2D other)
+    private bool IsPlayerInFOV()
     {
-        if (!other.CompareTag("Player")) return;
+        Vector2 dirToPlayer = _playerTransform.position - transform.position;
+        float distanceToPlayer = dirToPlayer.magnitude;
 
-        // Para redução se estava a decorrer
-        if (_reduceRoutine != null)
+        // 1. DISTANCE CHECK
+        if (distanceToPlayer > visionRange) return false;
+
+        // 2. ANGLE CHECK
+        // Using _guardNPC.transform.right because HumanNavigation rotates the parent NPC
+        if (Vector2.Angle(_guardNPC.transform.right, dirToPlayer.normalized) > visionAngle / 2f)
         {
-            StopCoroutine(_reduceRoutine);
-            _reduceRoutine = null;
+            return false;
         }
 
-        _player      = other.GetComponent<PlayerController>();
-        _playerRb    = other.GetComponent<Rigidbody2D>();
-        _loiterTimer = 0f;
-        _playerInCone = true;
-
-        // Avalia se deve começar a aumentar suspicion
-        EvaluateAndStartRaising(other);
-    }
-
-    void OnTriggerStay2D(Collider2D other)
-    {
-        if (!other.CompareTag("Player")) return;
-
-        // Reavalia continuamente — o shape do player pode ter mudado
-        // (ex: roubou identidade dentro do cone)
-        if (_raiseRoutine == null)
-            EvaluateAndStartRaising(other);
-    }
-
-    void OnTriggerExit2D(Collider2D other)
-    {
-        if (!other.CompareTag("Player")) return;
-
-        _playerInCone = false;
-        _loiterTimer  = 0f;
-
-        // Para aumento
-        if (_raiseRoutine != null)
+        // 3. WALL CHECK (Line of Sight)
+        RaycastHit2D[] hits = Physics2D.RaycastAll(transform.position, dirToPlayer.normalized, distanceToPlayer);
+        
+        foreach (var hit in hits)
         {
-            StopCoroutine(_raiseRoutine);
-            _raiseRoutine = null;
+            if (hit.collider.gameObject == gameObject || hit.collider.gameObject == _guardNPC.gameObject) continue; 
+            if (hit.collider.isTrigger) continue; 
+
+            if (hit.collider.transform == _playerTransform) return true; 
+
+            // Hit a solid wall before the player
+            return false; 
         }
 
-        // Inicia redução com delay
-        _reduceRoutine = StartCoroutine(ReduceSuspicionRoutine());
-
-        if (showDebugLog)
-            Debug.Log($"[SuspicionDetector] {_guardNPC?.name}: player saiu do cone. Suspicion={_currentSuspicion:F1}");
+        return false;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
     // Avaliação de contexto
     // ──────────────────────────────────────────────────────────────────────────
 
-    void EvaluateAndStartRaising(Collider2D playerCollider)
+    void EvaluateAndApplySuspicion()
     {
-        ShapeVisualizer sv = playerCollider.GetComponent<ShapeVisualizer>();
-        if (sv == null) return;
+        if (_playerVisualizer == null) return;
 
-        ShapeType playerShape = sv.shapeData.type;
+        ShapeType playerShape = _playerVisualizer.shapeData.type;
         
         bool isSuspiciousShape = IsSuspicious(playerShape);
         bool isDoingSuspiciousAction = false;
         
-        // Also check if running or loitering!
         if (_playerRb != null && _playerRb.linearVelocity.magnitude > runSpeedThreshold) isDoingSuspiciousAction = true;
         if (_loiterTimer >= loiteringTime) isDoingSuspiciousAction = true;
 
         if (isSuspiciousShape || isDoingSuspiciousAction)
         {
-            if (_raiseRoutine == null)
-                _raiseRoutine = StartCoroutine(RaiseSuspicionRoutine(playerCollider));
-        }
-        else
-        {
-            // Shape permitido e sem ação suspeita — para de aumentar se estava a aumentar
-            if (_raiseRoutine != null)
+            // Aumenta suspicion diretamente no Update em vez de usar uma Coroutine complexa
+            float multiplier = CalculateMultiplier();
+            _currentSuspicion += suspicionIncreaseRate * multiplier * Time.deltaTime;
+            _currentSuspicion = Mathf.Clamp(_currentSuspicion, 0f, MAX_SUSPICION);
+
+            if (showDebugLog)
+                Debug.Log($"[SuspicionDetector] suspicion={_currentSuspicion:F1} (x{multiplier:F2})");
+
+            if (_currentSuspicion >= MAX_SUSPICION)
             {
-                StopCoroutine(_raiseRoutine);
-                _raiseRoutine  = null;
-                _reduceRoutine = StartCoroutine(ReduceSuspicionRoutine());
+                TriggerAlarm();
             }
+        }
+        else if (_currentSuspicion > 0 && _reduceRoutine == null)
+        {
+            // Shape permitido e sem ação suspeita — começa a reduzir
+            _reduceRoutine = StartCoroutine(ReduceSuspicionRoutine());
         }
     }
 
@@ -201,109 +249,52 @@ public class SuspicionDetector : MonoBehaviour
     {
         if (isRestrictedToAll) return true;
         
-        // If they haven't set up the allowed shapes, let's warn them in case it's misconfigured
-        if (allowedShapes == null || allowedShapes.Length == 0)
-        {
-            if (showDebugLog) Debug.LogWarning($"[SuspicionDetector] {gameObject.name} has no allowedShapes! Everyone is allowed by default. Increase isRestrictedToAll if it's a restricted area.");
-            return false;
-        }
+        if (allowedShapes == null || allowedShapes.Length == 0) return false;
 
         return !System.Array.Exists(allowedShapes, s => s == playerShape);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Coroutines
+    // Coroutines & Multipliers
     // ──────────────────────────────────────────────────────────────────────────
-
-    IEnumerator RaiseSuspicionRoutine(Collider2D playerCollider)
-    {
-        while (_currentSuspicion < MAX_SUSPICION)
-        {
-            float multiplier = CalculateMultiplier();
-            _currentSuspicion += suspicionIncreaseRate * multiplier * Time.deltaTime;
-            _currentSuspicion  = Mathf.Clamp(_currentSuspicion, 0f, MAX_SUSPICION);
-
-            if (showDebugLog)
-                Debug.Log($"[SuspicionDetector] {_guardNPC?.name}: suspicion={_currentSuspicion:F1} (x{multiplier:F2})");
-
-            // Reavalia context a cada frame — se mudou de identidade para o shape
-            // correto ou parou de correr, para de aumentar
-            ShapeVisualizer sv = playerCollider.GetComponent<ShapeVisualizer>();
-            bool stillSuspiciousShape = sv != null && IsSuspicious(sv.shapeData.type);
-            bool stillDoingAction = false;
-            if (_playerRb != null && _playerRb.linearVelocity.magnitude > runSpeedThreshold) stillDoingAction = true;
-            if (_loiterTimer >= loiteringTime) stillDoingAction = true;
-
-            if (!stillSuspiciousShape && !stillDoingAction)
-            {
-                if (showDebugLog)
-                    Debug.Log($"[SuspicionDetector] Player parou de ser suspeito — a parar aumento");
-                break;
-            }
-
-            yield return null;
-        }
-
-        _raiseRoutine = null;
-
-        if (_currentSuspicion >= MAX_SUSPICION)
-            TriggerAlarm();
-    }
 
     IEnumerator ReduceSuspicionRoutine()
     {
         yield return new WaitForSeconds(decreaseDelay);
 
-        while (_currentSuspicion > 0f)
+        while (_currentSuspicion > 0f && !_playerInCone) // Only reduce if player is STILL out of sight
         {
             _currentSuspicion -= suspicionDecreaseRate * Time.deltaTime;
             _currentSuspicion  = Mathf.Clamp(_currentSuspicion, 0f, MAX_SUSPICION);
-
-            if (showDebugLog)
-                Debug.Log($"[SuspicionDetector] {_guardNPC?.name}: suspicion a baixar={_currentSuspicion:F1}");
-
             yield return null;
         }
 
         _reduceRoutine = null;
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Multiplier — combina todos os fatores de contexto
-    // ──────────────────────────────────────────────────────────────────────────
-
     float CalculateMultiplier()
     {
         float multiplier = 1f;
 
-        // Player a correr
         if (_playerRb != null && _playerRb.linearVelocity.magnitude > runSpeedThreshold)
-        {
             multiplier *= runningMultiplier;
-            if (showDebugLog) Debug.Log("[SuspicionDetector] Contexto: a correr");
-        }
 
-        // Player parado demasiado tempo (loitering)
         if (_loiterTimer >= loiteringTime)
-        {
             multiplier *= loiteringMultiplier;
-            if (showDebugLog) Debug.Log("[SuspicionDetector] Contexto: loitering");
-        }
 
         return multiplier;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Alarm — alerta todos os guardas na cena
+    // Alarm & UI
     // ──────────────────────────────────────────────────────────────────────────
 
     void TriggerAlarm()
     {
-        if (_player == null) return;
+        if (_playerTransform == null) return;
 
-        Vector3 playerPos = _player.transform.position;
-
-        Debug.Log($"[SuspicionDetector] ALARME! {_guardNPC?.name} alertou todos os guardas para {playerPos}");
+        Vector3 playerPos = _playerTransform.position;
+        Debug.Log($"[SuspicionDetector] ALARME! {_guardNPC?.name} alertou todos!");
 
         ControllerNPC[] allGuards = FindObjectsByType<ControllerNPC>(FindObjectsSortMode.None);
         foreach (var guard in allGuards)
@@ -311,13 +302,16 @@ public class SuspicionDetector : MonoBehaviour
             guard.Alert(playerPos);
         }
 
-        // Make suspicion truly impactful! Instant game over if they catch you doing something max level suspicious
         Debug.Log("MAX SUSPICION REACHED! GAME OVER!");
-        UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.TriggerGameOver();
+        }
+        else
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+        }
     }
-
-    private static Texture2D _bgTexture;
-    private static Texture2D _fillTexture;
 
     void OnGUI()
     {
@@ -327,17 +321,15 @@ public class SuspicionDetector : MonoBehaviour
         {
             Vector3 screenPos = Camera.main.WorldToScreenPoint(_guardNPC.transform.position + Vector3.up * 1.5f);
             
-            // Only draw if the guard is on screen (z > 0 in WorldToScreenPoint)
             if (screenPos.z > 0)
             {
-                screenPos.y = Screen.height - screenPos.y; // Flip Y for GUI
+                screenPos.y = Screen.height - screenPos.y; 
                 
                 float width = 80f;
                 float height = 15f;
                 Rect bgRect = new Rect(screenPos.x - width / 2, screenPos.y - height, width, height);
                 Rect fillRect = new Rect(bgRect.x, bgRect.y, width * SuspicionNormalized, height);
 
-                // Draw solid background
                 if (_bgTexture == null)
                 {
                     _bgTexture = new Texture2D(1, 1);
@@ -346,24 +338,19 @@ public class SuspicionDetector : MonoBehaviour
                 }
                 GUI.DrawTexture(bgRect, _bgTexture);
 
-                // Draw filled bar based on suspicion
                 Color barColor = Color.Lerp(Color.yellow, Color.red, SuspicionNormalized);
-                if (_fillTexture == null)
-                {
-                    _fillTexture = new Texture2D(1, 1);
-                }
+                if (_fillTexture == null) _fillTexture = new Texture2D(1, 1);
+                
                 _fillTexture.SetPixel(0, 0, barColor);
                 _fillTexture.Apply();
                 GUI.DrawTexture(fillRect, _fillTexture);
 
-                // Draw text
                 GUIStyle style = new GUIStyle(GUI.skin.label);
                 style.alignment = TextAnchor.MiddleCenter;
                 style.fontSize = 12;
                 style.fontStyle = FontStyle.Bold;
                 style.normal.textColor = Color.white;
                 
-                // Add a small drop shadow for the text
                 Rect shadowRect = new Rect(bgRect.x + 1, bgRect.y + 1, bgRect.width, bgRect.height);
                 GUIStyle shadowStyle = new GUIStyle(style);
                 shadowStyle.normal.textColor = Color.black;
@@ -375,26 +362,18 @@ public class SuspicionDetector : MonoBehaviour
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Public API
+    // Public API & Gizmos
     // ──────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Força suspicion máxima imediatamente (ex: distraction device especial).</summary>
     public void RaiseGlobalAlarm()
     {
         _currentSuspicion = MAX_SUSPICION;
         TriggerAlarm();
     }
 
-    /// <summary>Valor atual de suspicion (0-100). Útil para UI.</summary>
     public float CurrentSuspicion => _currentSuspicion;
-
-    /// <summary>Suspicion normalizada (0-1). Útil para UI.</summary>
     public float SuspicionNormalized => _currentSuspicion / MAX_SUSPICION;
 
-    /// <summary>
-    /// Aumenta suspicion externamente (ex: roubo de identidade em zona de alta suspeição).
-    /// Compatível com StartCoroutine externo — para quando já não for necessário.
-    /// </summary>
     public IEnumerator RaiseSuspicion()
     {
         while (_currentSuspicion < MAX_SUSPICION)
@@ -407,26 +386,23 @@ public class SuspicionDetector : MonoBehaviour
             TriggerAlarm();
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Gizmos
-    // ──────────────────────────────────────────────────────────────────────────
-
     void OnDrawGizmos()
     {
-        // Cor do cone muda consoante nível de suspeição
+        // Draw the math FOV instead of the PolygonCollider
+        Transform drawTransform = _guardNPC != null ? _guardNPC.transform : transform;
+
         float t = _currentSuspicion / MAX_SUSPICION;
         Gizmos.color = new Color(1f, 1f - t, 0f, 0.25f + t * 0.4f);
 
-        PolygonCollider2D cone = GetComponent<PolygonCollider2D>();
-        if (cone == null) return;
+        // Draw Left FOV Limit
+        Vector3 leftDir = Quaternion.Euler(0, 0, visionAngle / 2f) * drawTransform.right;
+        Gizmos.DrawRay(transform.position, leftDir * visionRange);
 
-        // Desenha o perímetro do cone
-        Vector2[] points = cone.points;
-        for (int i = 0; i < points.Length; i++)
-        {
-            Vector3 a = transform.TransformPoint(points[i]);
-            Vector3 b = transform.TransformPoint(points[(i + 1) % points.Length]);
-            Gizmos.DrawLine(a, b);
-        }
+        // Draw Right FOV Limit
+        Vector3 rightDir = Quaternion.Euler(0, 0, -visionAngle / 2f) * drawTransform.right;
+        Gizmos.DrawRay(transform.position, rightDir * visionRange);
+
+        // Draw front arc (approximate)
+        Gizmos.DrawWireSphere(transform.position, visionRange);
     }
 }

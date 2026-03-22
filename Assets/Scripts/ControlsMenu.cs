@@ -4,82 +4,94 @@ using TMPro;
 
 public class ControlsMenu : MonoBehaviour
 {
-    [Header("UI References")]
-    [SerializeField] private GameObject controlsPanel; // Reference to the Panel containing the controls info
-    [SerializeField] private TextMeshProUGUI controlsText; // Reference to the Text component
-    [SerializeField] private TextMeshProUGUI objectiveText; // Reference to the text component showing the current objective
+    [Header("Panel")]
+    [SerializeField] private GameObject controlsPanel;
+    [SerializeField] private TextMeshProUGUI objectiveText;
 
-    [Header("Input References")]
-    [SerializeField] private InputHandler inputHandler; // Reference to the script handling inputs
+    [Header("Conteúdo")]
+    [SerializeField] private GameObject controlsText;   // o Text (TMP) com os controls
+    [SerializeField] private GameObject mapImage;       // o Image com o mapa
+
+    [Header("Botões")]
+    [SerializeField] private Button controlsTabButton;
+    [SerializeField] private Button mapTabButton;
+
+    [Header("Tab Colors")]
+    [SerializeField] private Color tabActiveColor   = new Color(1f, 1f, 1f, 0.4f);
+    [SerializeField] private Color tabInactiveColor = new Color(0.3f, 0.3f, 0.3f, 0.3f);
+
+    [Header("Input")]
+    [SerializeField] private InputHandler inputHandler;
+
+    // ──────────────────────────────────────────────────────────────────────────
 
     private void OnEnable()
     {
         if (inputHandler != null)
-        {
-            inputHandler.OnShowControls += ToggleControls;
-        }
-        UpdateControlsText();
-        SetPanelBlack();
+            inputHandler.OnShowControls += TogglePanel;
     }
 
     private void OnDisable()
     {
         if (inputHandler != null)
-        {
-            inputHandler.OnShowControls -= ToggleControls;
-        }
+            inputHandler.OnShowControls -= TogglePanel;
     }
 
     private void Start()
     {
-        // Ensure the menu is hidden at start
         if (controlsPanel != null)
-        {
             controlsPanel.SetActive(false);
-        }
+
+        // Garante estado inicial correto
+        ShowControls();
     }
 
-    private void ToggleControls()
-    {
-        if (controlsPanel != null)
-        {
-            bool isActive = controlsPanel.activeSelf;
-            controlsPanel.SetActive(!isActive);
-            objectiveText.gameObject.SetActive(isActive); // Show objective text when controls are hidden, hide it when controls are shown
+    // ──────────────────────────────────────────────────────────────────────────
 
-            // Optional: Pause time when menu is open
-            // Time.timeScale = isActive ? 1f : 0f; 
-        }
+    private void TogglePanel()
+    {
+        if (controlsPanel == null) return;
+
+        bool isActive = controlsPanel.activeSelf;
+        controlsPanel.SetActive(!isActive);
+
+        // Pausa o jogo quando o menu está aberto
+        Time.timeScale = isActive ? 1f : 0f;
+
+        if (objectiveText != null)
+            objectiveText.gameObject.SetActive(isActive);
+
+        if (!isActive)
+            ShowControls();
     }
 
-    private void UpdateControlsText()
+    // ── Públicos — liga no Inspector dos botões ───────────────────────────────
+
+    public void ShowControls()
     {
-        if (controlsText != null)
-        {
-            // Melhorar a formatação e alinhamento
-            controlsText.alignment = TextAlignmentOptions.Center;
-            
-            // Usar formatação rica do TMPro para tamanhos e cores se necessário
-            controlsText.text = "<size=150%><b>CONTROLS</b></size>\n\n" +
-                "Move ................. WASD\n" +
-                "Steal Identity ....... Left Click\n" +
-                "Interact ............. Left Click\n" +
-                "Throw Distraction .... Right Click\n" +
-                "Drag Body ............ Hold F\n" +
-                "Peek Camera .......... Hold Shift\n" +
-                "Show/Hide ............ Escape";
-        }
+        if (controlsText != null) controlsText.SetActive(true);
+        if (mapImage != null)     mapImage.SetActive(false);
+
+        SetTabButtonColor(controlsTabButton, true);
+        SetTabButtonColor(mapTabButton,      false);
     }
 
-    private void SetPanelBlack()
+    public void ShowMap()
     {
-        if (controlsPanel != null)
-        {
-            Image panelImage = controlsPanel.GetComponent<Image>();
-            if (panelImage != null)
-            {
-                panelImage.color = new Color(0, 0, 0, 0.9f); // Preto quase opaco para boa leitura
-            }
-        }
+        if (controlsText != null) controlsText.SetActive(false);
+        if (mapImage != null)     mapImage.SetActive(true);
+
+        SetTabButtonColor(controlsTabButton, false);
+        SetTabButtonColor(mapTabButton,      true);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+
+    private void SetTabButtonColor(Button btn, bool isActive)
+    {
+        if (btn == null) return;
+        Image img = btn.GetComponent<Image>();
+        if (img != null)
+            img.color = isActive ? tabActiveColor : tabInactiveColor;
     }
 }

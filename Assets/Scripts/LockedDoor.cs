@@ -1,17 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.AI;
 
 /// <summary>
-/// LockedDoor — controla acesso por ShapeType tanto para o player como para NPCs.
-///
-/// Para o player: desativa o BoxCollider2D (passa fisicamente).
-/// Para NPCs: desativa o NavMeshObstacle (o NavMesh recalcula e permite passage).
-///
-/// Setup no Inspector:
-///   - _doorVisual: GameObject com BoxCollider2D + SpriteRenderer
-///   - O mesmo GameObject (ou este) deve ter um NavMeshObstacle com Carve = true
-///   - allowedShapes: shapes que têm acesso
+/// LockedDoor — controla acesso visual e colisão física apenas para o Player.
+/// Os NPCs são agora controlados nativamente pelas NavMesh Area Masks!
 /// </summary>
 public class LockedDoor : MonoBehaviour
 {
@@ -20,28 +12,16 @@ public class LockedDoor : MonoBehaviour
 
     private BoxCollider2D _doorCollider;
     private SpriteRenderer _doorRenderer;
-    private NavMeshObstacle _navObstacle;
 
-    // Conta separada por tipo de entidade — evita que o NPC feche a porta no player
     private int _playerEntries = 0;
     private int _npcEntries = 0;
 
-    // Rastreia quais NPCs estão autorizados dentro do trigger
-    // (para não decrementar em saídas de NPCs não autorizados)
     private HashSet<GameObject> _authorizedNPCsInside = new HashSet<GameObject>();
 
     private void Awake()
     {
         _doorCollider = _doorVisual.GetComponent<BoxCollider2D>();
         _doorRenderer = _doorVisual.GetComponent<SpriteRenderer>();
-
-        // NavMeshObstacle pode estar no doorVisual ou neste GameObject
-        _navObstacle = _doorVisual.GetComponent<NavMeshObstacle>();
-        if (_navObstacle == null)
-            _navObstacle = GetComponent<NavMeshObstacle>();
-
-        if (_navObstacle == null)
-            Debug.LogWarning($"[LockedDoor] {gameObject.name}: sem NavMeshObstacle — NPCs não serão bloqueados pelo NavMesh.");
     }
 
     private void OnTriggerEnter2D(Collider2D other)
@@ -67,14 +47,14 @@ public class LockedDoor : MonoBehaviour
         }
         else
         {
-            // É um NPC
+            // É um NPC - se o NavMesh o trouxe até aqui, ele tem permissão, 
+            // mas validamos na mesma para abrir a porta visualmente.
             if (isAllowed)
             {
                 _npcEntries++;
                 _authorizedNPCsInside.Add(other.gameObject);
                 RefreshDoorState();
             }
-            // NPC não autorizado — a porta/obstáculo continua ativo, o NavMesh impede-o
         }
     }
 
@@ -96,7 +76,6 @@ public class LockedDoor : MonoBehaviour
         }
         else
         {
-            // Só decrementa se este NPC estava realmente autorizado dentro
             if (_authorizedNPCsInside.Remove(other.gameObject))
             {
                 _npcEntries = Mathf.Max(0, _npcEntries - 1);
@@ -105,10 +84,6 @@ public class LockedDoor : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Atualiza o estado da porta com base em quem está dentro do trigger.
-    /// A porta abre se houver pelo menos um player OU NPC autorizado dentro.
-    /// </summary>
     private void RefreshDoorState()
     {
         bool anyoneAuthorizedInside = (_playerEntries + _npcEntries) > 0;
@@ -125,10 +100,6 @@ public class LockedDoor : MonoBehaviour
         if (_doorCollider != null)
             _doorCollider.enabled = false;
 
-        // NavMesh — NPCs passam
-        if (_navObstacle != null)
-            _navObstacle.enabled = false;
-
         // Visual
         SetDoorAlpha(0.5f);
     }
@@ -138,10 +109,6 @@ public class LockedDoor : MonoBehaviour
         // Física
         if (_doorCollider != null)
             _doorCollider.enabled = true;
-
-        // NavMesh
-        if (_navObstacle != null)
-            _navObstacle.enabled = true;
 
         // Visual
         SetDoorAlpha(1f);

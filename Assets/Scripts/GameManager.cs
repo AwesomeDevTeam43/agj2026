@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using TMPro;
+using UnityEngine.UI;
 
 public class GameManager : MonoBehaviour
 {
@@ -17,9 +18,12 @@ public class GameManager : MonoBehaviour
     
     [Header("Checklist UI")]
     [SerializeField] private TextMeshProUGUI _checklistText;
-    
     [SerializeField] private string checkBox = "[X]";
     [SerializeField] private string uncheckBox = "[ ]";
+
+    [Header("Suspicion Bar")]
+    [SerializeField] private Slider _suspicionBar;
+    [SerializeField] private TextMeshProUGUI _suspicionText;
 
     private bool _isGameOver = false;
 
@@ -50,7 +54,31 @@ public class GameManager : MonoBehaviour
         if (_isGameOver && _input.DragInput)
             RestartLevel();
 
+        UpdateSuspicionBar();
+    }
 
+    private void UpdateSuspicionBar()
+    {
+        float maxSuspicion = 0f;
+        SuspicionDetector[] detectors = FindObjectsByType<SuspicionDetector>(FindObjectsSortMode.None);
+        foreach (var detector in detectors)
+        {
+            if (detector.SuspicionNormalized > maxSuspicion)
+            {
+                maxSuspicion = detector.SuspicionNormalized;
+            }
+        }
+        
+        // Use the normalized maximum suspicion value (0 to 1)
+        if (_suspicionBar != null)
+        {
+            _suspicionBar.value = maxSuspicion;
+        }
+
+        if (_suspicionText != null)
+        {
+            _suspicionText.text = $"{Mathf.RoundToInt(maxSuspicion * 100f)}%";
+        }
     }
 
     public void RestartLevel()

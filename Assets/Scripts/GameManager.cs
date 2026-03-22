@@ -23,6 +23,19 @@ public class GameManager : MonoBehaviour
 
     private bool _isGameOver = false;
 
+    public void GetPlayerActionObservers(System.Collections.Generic.List<ISeesPlayerActions> observers)
+    {
+        // Find all NPCs in the scene that implement ISeesPlayerActions and add them to the list
+        ControllerNPC[] npcs = FindObjectsOfType<ControllerNPC>();
+        foreach (var npc in npcs)
+        {
+            if (npc is ISeesPlayerActions observer)
+            {
+                observers.Add(observer);
+            }
+        }
+    }
+
     private void Awake()
     {
         if (Instance != null && Instance != this)

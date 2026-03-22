@@ -22,13 +22,13 @@ public class Test : MonoBehaviour, IInteractable
     private float _lastTimeWithinStealRange = float.NegativeInfinity;
     private bool _isInStealCoyoteTime = false;
 
-    private Queue<float> killHistory = new Queue<float>();
+    public static Queue<float> killHistory = new Queue<float>();
 
 
     [Header("Kill Overload Settings")]
     [Tooltip("How many kills can be committed within the time window before suspicion is maxed?")]
     [SerializeField] private int killThreshold = 3;
-    [SerializeField] private float killWindow = 10f;
+    [SerializeField] private float killWindow = 40f;
 
     public static bool GlobalArmActive = false;
 
@@ -269,15 +269,15 @@ public class Test : MonoBehaviour, IInteractable
             gameObject.tag = "Draggable";
             _isStealing = false;
 
-            // Disable NPC logic so it stops moving
-            var controller = GetComponent<ControllerNPC>();
-            if (controller != null) controller.enabled = false;
-
             if (killHistory.Count >= killThreshold)
             {
                 Debug.Log("Kill threshold exceeded, maxing out suspicion!");
                 suspicionDetector.RaiseGlobalAlarm();
             }
+            // Disable NPC logic so it stops moving
+            var controller = GetComponent<ControllerNPC>();
+            if (controller != null) controller.enabled = false;
+
             gameObject.tag = "Draggable";
             _isStealing = false;
             CancelSteal();

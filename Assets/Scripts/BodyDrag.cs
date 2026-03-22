@@ -12,6 +12,7 @@ public class BodyDrag : MonoBehaviour
     private GameObject _draggedBody = null;
     private Collider2D _draggedCollider = null;
     [SerializeField] private float tooltipRange = 2.0f;
+    public bool IsDragging => _draggedBody != null;
 
     void Awake()
     {

@@ -283,7 +283,17 @@ public class Test : MonoBehaviour, IInteractable
             if (agent != null) agent.enabled = false;
 
             var controller = GetComponent<ControllerNPC>();
-            if (controller != null) controller.enabled = false;
+            if (controller != null) {
+                controller.currentState = ControllerNPC.NPCState.Dead;
+                controller.enabled = false;
+
+            }
+            if (suspicionDetector != null) {suspicionDetector.ForceDisable();}
+            else
+            {
+                var sd = GetComponentInChildren<SuspicionDetector>();
+                if (sd != null) sd.ForceDisable();
+            }
             gameObject.tag = "Draggable";
             _isStealing = false;
             CancelSteal();
@@ -295,6 +305,7 @@ public class Test : MonoBehaviour, IInteractable
             yield break;
         }
     }
+    
 
     private void OnDrawGizmos()
     {

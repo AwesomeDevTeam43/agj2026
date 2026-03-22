@@ -30,6 +30,7 @@ public class PlayerController : MonoBehaviour
         if (shapeData != null)
         {
             shapeVisualizer.ApplyShape(shapeData);
+            moveSpeed = shapeData.baseSpeed;
         }
     }
 
@@ -71,6 +72,11 @@ public class PlayerController : MonoBehaviour
         );
 
         transform.rotation = Quaternion.Euler(0f, 0f, smoothedAngle);
+    }
+
+    public void SetSpeed(float newSpeed)
+    {
+        moveSpeed = newSpeed;
     }
 }
 

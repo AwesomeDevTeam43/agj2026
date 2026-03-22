@@ -24,6 +24,8 @@ public class TooltipManager : MonoBehaviour
 
     public void ShowTooltip(string text, Vector3 position)
     {
+        if (tooltipUI == null) return;
+        
         tooltipUI.SetActive(true);
         tooltipText.text = text;
         Vector2 screenPos = Camera.main.WorldToScreenPoint(position);
@@ -32,6 +34,9 @@ public class TooltipManager : MonoBehaviour
 
     public void HideTooltip()
     {
-        tooltipUI.SetActive(false);
+        if (tooltipUI != null)
+        {
+            tooltipUI.SetActive(false);
+        }
     }
 }

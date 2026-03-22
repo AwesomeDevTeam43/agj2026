@@ -134,10 +134,10 @@ public class ControllerNPC : MonoBehaviour, ISeesPlayerActions
             interestPoints = FindObjectsByType<InterestPoint>(FindObjectsSortMode.None);
 
         GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
-        if (playerObj != null)
+        if (playerObj != null){
             playerTransform = playerObj.transform;
             bodyDrag = playerObj.GetComponent<BodyDrag>();
-
+        }
         if (shapeData.type == ShapeType.Hexagon && !isStationary)
             GeneratePatrolRoute();
 
@@ -280,7 +280,6 @@ public class ControllerNPC : MonoBehaviour, ISeesPlayerActions
 
         // Draws a red line in the Scene view so you can visually verify the line of sight!
         Debug.DrawRay(transform.position, dirToPlayer.normalized * visionRange, Color.red, 2f);
-
         RaycastHit2D[] hits = Physics2D.RaycastAll(transform.position, dirToPlayer.normalized, visionRange);
         
         foreach (var hit in hits)

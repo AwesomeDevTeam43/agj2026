@@ -34,6 +34,30 @@ public class EletricPanel : MonoBehaviour, IInteractable
         {
             Debug.DrawLine(transform.position, activeWorker.transform.position, Color.red);
         }
+
+        if (playerController != null)
+        {
+            float distance = Vector2.Distance(transform.position, playerController.transform.position);
+            if (distance <= interactionRadius)
+            {
+                HandleTooltip();
+            }
+            else
+            {
+                TooltipManager.Instance.HideTooltip();
+            }
+        }
+    }
+
+    void HandleTooltip()
+    {   if (isPowered)
+        {
+            TooltipManager.Instance.ShowTooltip("Click with LMB to Cut Power", transform.position);
+        }
+        else
+        {
+            TooltipManager.Instance.ShowTooltip("Power is cut! cannot interact", transform.position);
+        }
     }
 
     public void OnClick()

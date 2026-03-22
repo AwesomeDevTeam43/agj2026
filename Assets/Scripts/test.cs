@@ -269,15 +269,21 @@ public class Test : MonoBehaviour, IInteractable
             gameObject.tag = "Draggable";
             _isStealing = false;
 
+
             if (killHistory.Count >= killThreshold)
             {
                 Debug.Log("Kill threshold exceeded, maxing out suspicion!");
                 suspicionDetector.RaiseGlobalAlarm();
             }
-            // Disable NPC logic so it stops moving
+
+            var nav = GetComponent<HumanNavigation>();
+            if (nav != null) nav.enabled = false;
+
+            var agent = GetComponent<UnityEngine.AI.NavMeshAgent>();
+            if (agent != null) agent.enabled = false;
+
             var controller = GetComponent<ControllerNPC>();
             if (controller != null) controller.enabled = false;
-
             gameObject.tag = "Draggable";
             _isStealing = false;
             CancelSteal();

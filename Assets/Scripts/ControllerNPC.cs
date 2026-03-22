@@ -17,7 +17,7 @@ using UnityEngine.AI;
 /// </summary>
 [RequireComponent(typeof(NavMeshAgent))]
 [RequireComponent(typeof(HumanNavigation))]
-public class ControllerNPC : MonoBehaviour
+public class ControllerNPC : MonoBehaviour, ISeesPlayerActions
 {
     // ──────────────────────────────────────────────────────────────────────────
     // State machine
@@ -253,6 +253,56 @@ public class ControllerNPC : MonoBehaviour
     // ──────────────────────────────────────────────────────────────────────────
     // Dead body detection
     // ──────────────────────────────────────────────────────────────────────────
+    public void OnPlayerPickedUpTreasure(GameObject player)
+    {
+        if (CanSeePlayer(player))
+        {
+            if (shapeData.type == ShapeType.Hexagon)
+            {
+                Debug.Log($"[NPC] {gameObject.name} viu o jogador a roubar o tesouro!");
+                Alert(player.transform.position);
+            }
+            else
+            {
+                Debug.Log($"[NPC] {gameObject.name} viu o jogador a roubar o tesouro e entrou em pânico!");
+                PanicAndFindGuard(player.transform.position);
+            }
+        }
+    }
+    public bool CanSeePlayer(GameObject player)
+    {
+      if (playerTransform == null) return false;
+
+        Vector2 dirToPlayer = playerTransform.position - transform.position;
+        if (dirToPlayer.magnitude > visionRange) return false;
+
+        // Draws a red line in the Scene view so you can visually verify the line of sight!
+        Debug.DrawRay(transform.position, dirToPlayer.normalized * visionRange, Color.red, 2f);
+
+        RaycastHit2D[] hits = Physics2D.RaycastAll(transform.position, dirToPlayer.normalized, visionRange);
+        
+        foreach (var hit in hits)
+        {
+            // 1. Ignore the NPC itself
+            if (hit.collider.gameObject == gameObject) continue;
+            
+            // 2. DID WE HIT THE PLAYER? Check by tag to avoid child-object / trigger issues
+            if (hit.collider.CompareTag("Player")) 
+            {
+                Debug.Log($"[Vision] {gameObject.name} clearly sees the Player!");
+                return true;
+            }
+
+            // 3. Ignore non-player triggers (like the Treasure zone itself)
+            if (hit.collider.isTrigger) continue;
+
+            // 4. If we hit a solid wall before finding the player, vision is blocked
+            Debug.Log($"[Vision] {gameObject.name}'s vision blocked by {hit.collider.name}");
+            return false; 
+        }
+
+        return false; 
+    }
 
     void CheckForDeadBodies()
     {

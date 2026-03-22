@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using System.Linq;
 
 public class Teasure : MonoBehaviour
 {
@@ -23,6 +24,10 @@ public class Teasure : MonoBehaviour
             if (GameManager.Instance != null)
             {
                 GameManager.Instance.CollectTreasure(_locale);
+                foreach (var observer in FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None).OfType<ISeesPlayerActions>())
+                {
+                    observer.OnPlayerPickedUpTreasure(collision.gameObject);
+                }
             }
             else
             {

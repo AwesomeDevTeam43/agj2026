@@ -196,8 +196,10 @@ public class HumanNavigation : MonoBehaviour
         if (!agent.hasPath || agent.pathStatus == NavMeshPathStatus.PathInvalid)
             agent.SetDestination(target);
 
-        // Emergency timeout pra não ficar preso para sempre
-        float timeout = 10f; 
+        // Define timeout baseado na distância esperada, com mínimo de 15 segundos
+        float expectedTime = Vector2.Distance(transform.position, target) / Mathf.Max(0.5f, baseSpeed);
+        float timeout = Mathf.Max(15f, expectedTime * 2f); 
+        float initialTimeout = timeout;
 
         while (timeout > 0f)
         {
@@ -227,11 +229,10 @@ public class HumanNavigation : MonoBehaviour
                 agent.SetDestination(target);
 
             // Pára se tiver colidido com algo e não conseguir avançar muito
-            if (agent.velocity.sqrMagnitude < 0.05f && agent.remainingDistance > agent.stoppingDistance && !agent.pathPending && timeout < 9.5f)
+            if (agent.velocity.sqrMagnitude < 0.05f && agent.remainingDistance > agent.stoppingDistance && !agent.pathPending && (initialTimeout - timeout > 1.0f))
             {
-               // Se esteve meio segundo sem se mexer significativamente... 
-               // força sair do loop se já estiver muito perto
-               if(Vector2.Distance(transform.position, target) < agent.stoppingDistance + 0.8f) {
+               // Se passou mais de 1 segundo e não se move, e está perto o suficiente, quebra o loop.
+               if(Vector2.Distance(transform.position, target) < agent.stoppingDistance + 1f) {
                    break;
                }
             }
@@ -420,9 +421,15 @@ public class HumanNavigation : MonoBehaviour
         float distance = Vector2.Distance(target2D, pos2D);
         
         // Usa stoppingDistance com uma margem extra bem grande para 2D e interações
-        float threshold = agent.stoppingDistance + 0.35f; 
+        float threshold = agent.stoppingDistance + 1f; 
         
-        return distance <= threshold || (agent.remainingDistance <= threshold && !agent.hasPath);
+        // Se a distância real em linha reta for pequena o suficiente, consideramos que chegou
+        if (distance <= threshold) return true;
+
+        // Se tem caminho, verificamos a distância restante calculada pelo navmesh
+        if (agent.hasPath && agent.remainingDistance <= threshold) return true;
+
+        return false;
     }
 
     // ──────────────────────────────────────────────────────────────────────────

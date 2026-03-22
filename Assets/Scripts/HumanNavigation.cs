@@ -220,13 +220,13 @@ public class HumanNavigation : MonoBehaviour
             yield return new WaitUntil(() => !agent.pathPending);
 
             // Caminha até ao waypoint com velocidade orgânica
-            yield return StartCoroutine(WalkToPoint(waypoint, isFinal));
+            yield return WalkToPoint(waypoint, isFinal);
 
             // Micro-pausa (apenas em waypoints intermédios)
             if (!isFinal && Random.value < micropauseProbability && activeProfile != MovementProfile.Urgent)
             {
                 float pauseDuration = Random.Range(micropauseMin, micropauseMax);
-                yield return StartCoroutine(MicroPause(pauseDuration));
+                yield return MicroPause(pauseDuration);
             }
         }
 

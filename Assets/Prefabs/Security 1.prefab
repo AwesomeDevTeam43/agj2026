@@ -476,8 +476,8 @@ MonoBehaviour:
   visionAngle: 65
   allowedShapes: 
   isRestrictedToAll: 0
-  suspicionIncreaseRate: 20
-  suspicionDecreaseRate: 5
+  suspicionIncreaseRate: 12.5
+  suspicionDecreaseRate: 3
   decreaseDelay: 3
   runningMultiplier: 2.5
   runSpeedThreshold: 3

@@ -2,28 +2,33 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using TMPro;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using System;
 
 public class GameManager : MonoBehaviour
 {
     [SerializeField] private InputHandler _input;
     public static GameManager Instance { get; private set; }
     [Header("UI Panels")]
-    [SerializeField] private GameObject _winScreen;
-    [SerializeField] private GameObject _loseScreen;
+    [SerializeField] private GameObject _endScreen;
+    [SerializeField] private string _winMessage = "Congratulations, you have achieved success in your mission!";
+    [SerializeField] private string _loseMessage = "You have been caught! Better luck next time.";
+    [SerializeField] private TextMeshProUGUI _endScreenText;
+
+    [Header("End Screen Buttons (Sprite-based)")]
+    [SerializeField] private GameObject _restartSpriteBtn;
+    [SerializeField] private GameObject _quitSpriteBtn;
+
 
     [Header("Game Object References")]
     private bool staffRoomTreasure = false;
     private bool vipRoomTreasure = false;
     private bool officeRoomTreasure = false;
-    
+
     [Header("Checklist UI")]
     [SerializeField] private TextMeshProUGUI _checklistText;
     [SerializeField] private string checkBox = "[X]";
     [SerializeField] private string uncheckBox = "[ ]";
-
-    [Header("Suspicion Bar")]
-    [SerializeField] private Slider _suspicionBar;
-    [SerializeField] private TextMeshProUGUI _suspicionText;
 
     private bool _isGameOver = false;
 
@@ -56,17 +61,20 @@ public class GameManager : MonoBehaviour
         Time.timeScale = 1f;
         _isGameOver = false;
 
-        //_winScreen.SetActive(false);
-        //_loseScreen.SetActive(false);
+        if (_endScreen != null)
+            _endScreen.SetActive(false);
+
+        if (_restartSpriteBtn != null)
+            _restartSpriteBtn.SetActive(false);
+
+        if (_quitSpriteBtn != null)
+            _quitSpriteBtn.SetActive(false);
 
         UpdateChecklistUI();
     }
 
     private void Update()
     {
-        if (_isGameOver && _input.DragInput)
-            RestartLevel();
-
         UpdateSuspicionBar();
     }
 
@@ -81,36 +89,32 @@ public class GameManager : MonoBehaviour
                 maxSuspicion = detector.SuspicionNormalized;
             }
         }
-        
-        // Use the normalized maximum suspicion value (0 to 1)
-        if (_suspicionBar != null)
-        {
-            _suspicionBar.value = maxSuspicion;
-        }
-
-        if (_suspicionText != null)
-        {
-            _suspicionText.text = $"{Mathf.RoundToInt(maxSuspicion * 100f)}%";
-        }
     }
 
     public void RestartLevel()
     {
+        Time.timeScale = 1f; // Restore time scale before reloading
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    public void QuitGame()
+    {
+        Debug.Log("Game Quit requested!");
+        Application.Quit();
     }
 
     public void CollectTreasure(Teasure.RoomLocale locale)
     {
         switch (locale)
         {
-            case Teasure.RoomLocale.StaffRoom: 
-                staffRoomTreasure = true; 
+            case Teasure.RoomLocale.StaffRoom:
+                staffRoomTreasure = true;
                 break;
-            case Teasure.RoomLocale.VipRoom: 
-                vipRoomTreasure = true; 
+            case Teasure.RoomLocale.VipRoom:
+                vipRoomTreasure = true;
                 break;
-            case Teasure.RoomLocale.OfficeRoom: 
-                officeRoomTreasure = true; 
+            case Teasure.RoomLocale.OfficeRoom:
+                officeRoomTreasure = true;
                 break;
         }
 
@@ -131,26 +135,38 @@ public class GameManager : MonoBehaviour
             string staffStr = $"{(staffRoomTreasure ? checkBox : uncheckBox)} Staff Room Treasure\n";
             string vipStr = $"{(vipRoomTreasure ? checkBox : uncheckBox)} VIP Room Treasure\n";
             string officeStr = $"{(officeRoomTreasure ? checkBox : uncheckBox)} Office Room Treasure";
-            
+
             _checklistText.text = staffStr + vipStr + officeStr;
         }
+    }
+
+    private void DisableGameplayUI()
+    {
+        if (_checklistText != null) _checklistText.gameObject.SetActive(false);
+    }
+
+    private void ShowEndScreen(string message)
+    {
+        _isGameOver = true;
+        Time.timeScale = 0f;
+        DisableGameplayUI();
+
+        if (_endScreenText != null) _endScreenText.text = message;
+        if (_endScreen != null) _endScreen.SetActive(true);
+
+        if (_restartSpriteBtn != null) _restartSpriteBtn.SetActive(true);
+        if (_quitSpriteBtn != null) _quitSpriteBtn.SetActive(true);
     }
 
     public void TriggerGameOver()
     {
         if (_isGameOver) return;
-
-        _isGameOver = true;
-        Time.timeScale = 0f;
-        _loseScreen.SetActive(true);
+        ShowEndScreen(_loseMessage);
     }
 
     public void TriggerWin()
     {
         if (_isGameOver) return;
-
-        _isGameOver = true;
-        Time.timeScale = 0f;
-        _winScreen.SetActive(true);
+        ShowEndScreen(_winMessage);
     }
 }

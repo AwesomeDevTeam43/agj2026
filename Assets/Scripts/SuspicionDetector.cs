@@ -312,22 +312,23 @@ public class SuspicionDetector : MonoBehaviour
             UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
         }
     }
-
-    void OnGUI()
+void OnGUI()
     {
         if (Event.current.type != EventType.Repaint) return;
 
         if (_currentSuspicion > 0.1f && _guardNPC != null)
         {
+            // ---------------------------------------------------------
+            // 1. Draw the bar over the Guard's head (if on screen)
+            // ---------------------------------------------------------
             Vector3 screenPos = Camera.main.WorldToScreenPoint(_guardNPC.transform.position + Vector3.up * 1.5f);
             
             if (screenPos.z > 0)
             {
-                screenPos.y = Screen.height - screenPos.y; 
-                
+                float barY = Screen.height - screenPos.y; // Convert to GUI space
                 float width = 80f;
                 float height = 15f;
-                Rect bgRect = new Rect(screenPos.x - width / 2, screenPos.y - height, width, height);
+                Rect bgRect = new Rect(screenPos.x - width / 2, barY - height, width, height);
                 Rect fillRect = new Rect(bgRect.x, bgRect.y, width * SuspicionNormalized, height);
 
                 if (_bgTexture == null)
@@ -358,9 +359,74 @@ public class SuspicionDetector : MonoBehaviour
                 
                 GUI.Label(bgRect, "Suspicion", style);
             }
+
+            // ---------------------------------------------------------
+            // 2. NEW: Dynamic Edge Indicator "!"
+            // ---------------------------------------------------------
+            Vector3 center = new Vector3(Screen.width / 2f, Screen.height / 2f, 0f);
+            Vector3 guardScreenPos = Camera.main.WorldToScreenPoint(_guardNPC.transform.position);
+
+            // If the guard is behind the camera, invert the coordinates to point behind us
+            if (guardScreenPos.z < 0)
+            {
+                guardScreenPos.x = Screen.width - guardScreenPos.x;
+                guardScreenPos.y = Screen.height - guardScreenPos.y;
+            }
+
+            Vector3 dir = (guardScreenPos - center).normalized;
+
+            // Define the bounding box (screen edges minus some padding)
+            float padding = 40f;
+            float boundsX = (Screen.width / 2f) - padding;
+            float boundsY = (Screen.height / 2f) - padding;
+
+            Vector3 edgePos = Vector3.zero;
+
+            // Mathematical projection to snap the vector to the edges of a rectangle
+            if (Mathf.Abs(dir.x) < 0.0001f)
+            {
+                edgePos.x = 0;
+                edgePos.y = Mathf.Sign(dir.y) * boundsY;
+            }
+            else
+            {
+                float slope = dir.y / dir.x;
+                if (Mathf.Abs(slope) > boundsY / boundsX)
+                {
+                    // Hits the Top or Bottom edge
+                    edgePos.y = Mathf.Sign(dir.y) * boundsY;
+                    edgePos.x = edgePos.y / slope;
+                }
+                else
+                {
+                    // Hits the Left or Right edge
+                    edgePos.x = Mathf.Sign(dir.x) * boundsX;
+                    edgePos.y = edgePos.x * slope;
+                }
+            }
+
+            Vector3 indicatorPos = center + edgePos;
+
+            // Convert to GUI space (Y is flipped)
+            float guiX = indicatorPos.x;
+            float guiY = Screen.height - indicatorPos.y;
+
+            // Draw the bouncing Edge Indicator
+            GUIStyle warningStyle = new GUIStyle(GUI.skin.label);
+            warningStyle.fontSize = 40;
+            warningStyle.fontStyle = FontStyle.Bold;
+            warningStyle.alignment = TextAnchor.MiddleCenter;
+            
+            // Cool touch: The "!" turns from orange to deep red as suspicion fills up
+            warningStyle.normal.textColor = Color.Lerp(new Color(1f, 0.5f, 0f), Color.red, SuspicionNormalized); 
+
+            GUIStyle warningShadow = new GUIStyle(warningStyle);
+            warningShadow.normal.textColor = Color.black;
+
+            GUI.Label(new Rect(guiX - 23, guiY - 23, 50, 50), "!", warningShadow);
+            GUI.Label(new Rect(guiX - 25, guiY - 25, 50, 50), "!", warningStyle);
         }
     }
-
     // ──────────────────────────────────────────────────────────────────────────
     // Public API & Gizmos
     // ──────────────────────────────────────────────────────────────────────────

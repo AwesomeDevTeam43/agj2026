@@ -28,7 +28,8 @@ public class HumanNavigation : MonoBehaviour
         Purposeful, // VIP a ir para um sítio específico — mais direto mas ainda humano
         Guard,      // Segurança — passo firme, poucas pausas, mais reto
         Worker,     // Funcionário — andar funcional, ligeiramente apressado
-        Urgent      // Alerta / emergência — quase a correr, sem desvios
+        Urgent,      // Alerta / emergência — quase a correr, sem desvios
+        Dead        // NPC morto — sem movimento, usado para corpos no chão (não tem comportamento)
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -132,6 +133,12 @@ public class HumanNavigation : MonoBehaviour
     /// <summary>Cancela a viagem em curso imediatamente.</summary>
     public void StopJourney()
     {
+        if (activeProfile == MovementProfile.Dead)
+        {
+            // NPC morto não pode iniciar ou parar viagens
+            return;
+        }
+        
         if (journeyCoroutine != null)
         {
             StopCoroutine(journeyCoroutine);

@@ -165,6 +165,11 @@ public class SuspicionDetector : MonoBehaviour
             EvaluateAndApplySuspicion();
         }
     }
+    public void ForceDisable()
+    {
+        _currentSuspicion = 0f; // Instantly zero out the math
+        this.enabled = false;   // Unity instantly stops Update() and OnGUI()!
+    }
 
     // ──────────────────────────────────────────────────────────────────────────
     // Field of View Core Logic
@@ -298,7 +303,14 @@ public class SuspicionDetector : MonoBehaviour
         }
 
         Debug.Log("MAX SUSPICION REACHED! GAME OVER!");
-        UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.TriggerGameOver();
+        }
+        else
+        {
+            UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+        }
     }
 
     void OnGUI()

@@ -108,6 +108,7 @@ public class ControllerNPC : MonoBehaviour, ISeesPlayerActions
     private int             patrolIndex = 0;
 
     private Transform       playerTransform;
+    private BodyDrag        bodyDrag;
 
     // ──────────────────────────────────────────────────────────────────────────
     // Unity lifecycle
@@ -135,6 +136,7 @@ public class ControllerNPC : MonoBehaviour, ISeesPlayerActions
         GameObject playerObj = GameObject.FindGameObjectWithTag("Player");
         if (playerObj != null)
             playerTransform = playerObj.transform;
+            bodyDrag = playerObj.GetComponent<BodyDrag>();
 
         if (shapeData.type == ShapeType.Hexagon && !isStationary)
             GeneratePatrolRoute();
@@ -305,8 +307,20 @@ public class ControllerNPC : MonoBehaviour, ISeesPlayerActions
         return false; 
     }
 
-    void CheckForDeadBodies()
+  void CheckForDeadBodies()
     {
+        // 1. NEW: Check if the player is actively carrying a dead body right in front of us!
+        if (bodyDrag != null && bodyDrag.IsDragging)
+        {
+            if (CanSeePlayer(playerTransform.gameObject))
+            {
+                Debug.Log($"[NPC] {gameObject.name} saw the player dragging a body!!");
+                PanicAndFindGuard(playerTransform.position);
+                return; // Stop checking the floor, we already panicked!
+            }
+        }
+
+        // 2. EXISTING: Check for bodies lying on the floor
         Collider2D[] hits = Physics2D.OverlapCircleAll(transform.position, visionRange);
         foreach (var hit in hits)
         {
@@ -317,7 +331,7 @@ public class ControllerNPC : MonoBehaviour, ISeesPlayerActions
                 break;
             }
         }
-    }
+    } 
 
 void PanicAndFindGuard(Vector3 bodyPosition)
     {

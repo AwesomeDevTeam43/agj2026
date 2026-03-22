@@ -282,6 +282,7 @@ public class ControllerNPC : MonoBehaviour, ISeesPlayerActions
         RaycastHit2D[] hits = Physics2D.RaycastAll(transform.position, dirToPlayer.normalized, visionRange);
         
         foreach (var hit in hits)
+        
         {
             // 1. Ignore the NPC itself
             if (hit.collider.gameObject == gameObject) continue;
@@ -318,9 +319,9 @@ public class ControllerNPC : MonoBehaviour, ISeesPlayerActions
         }
     }
 
-    void PanicAndFindGuard(Vector3 bodyPosition)
+void PanicAndFindGuard(Vector3 bodyPosition)
     {
-        Debug.Log($"[NPC] {gameObject.name} ({shapeData.type}) viu um corpo!");
+        Debug.Log($"[NPC] {gameObject.name} ({shapeData.type}) viu um corpo e precisa de ajuda!");
 
         if (shapeData.type == ShapeType.Hexagon)
         {
@@ -333,30 +334,77 @@ public class ControllerNPC : MonoBehaviour, ISeesPlayerActions
         ReleaseCurrentInterestPoint();
         currentState = NPCState.CallingGuard;
 
-        ControllerNPC nearestGuard = null;
-        float minDist = float.MaxValue;
-        foreach (var npc in FindObjectsByType<ControllerNPC>(FindObjectsSortMode.None))
+        // 1. Try to find a Guard first
+        ControllerNPC target = FindReachableNPC(new List<ShapeType> { ShapeType.Hexagon });
+
+        // 2. If no Guard is reachable, look for a Staff member or VIP to pass the message to!
+        if (target == null)
         {
-            if (npc.shapeData?.type != ShapeType.Hexagon) continue;
-            float d = Vector2.Distance(transform.position, npc.transform.position);
-            if (d < minDist) { minDist = d; nearestGuard = npc; }
+            Debug.Log($"[NPC] {gameObject.name} cannot reach a Guard. Looking for Staff/VIP!");
+            target = FindReachableNPC(new List<ShapeType> { ShapeType.Square, ShapeType.Triangle });
         }
 
-        if (nearestGuard != null)
+        // 3. Run to whoever we found
+        if (target != null)
         {
-            nav.StartJourney(nearestGuard.transform.position, HumanNavigation.MovementProfile.Urgent, () =>
+            nav.StartJourney(target.transform.position, HumanNavigation.MovementProfile.Urgent, () =>
             {
-                Debug.Log($"[NPC] {gameObject.name} alertou {nearestGuard.name}!");
-                nearestGuard.InvestigatePosition(bodyPosition);
-                EnterIdle(3f);
+                Debug.Log($"[NPC] {gameObject.name} pediu ajuda a {target.name}!");
+                target.ReceivePanic(bodyPosition); // Pass the panic to the proxy
+                EnterIdle(5f); // The guest rests/cowers while the proxy handles it
             });
         }
         else
         {
-            EnterIdle(3f);
+            // FALLBACK: Completely trapped alone in a room. 
+            Debug.LogWarning($"[NPC] {gameObject.name} is trapped with a body! Cowering.");
+            EnterIdle(5f); 
         }
     }
 
+    // Called when another NPC runs up to this one and asks for help
+    // Helper method to find the closest reachable NPC of specific Shape Types
+public void ReceivePanic(Vector3 bodyPosition)
+    {
+        if (!enabled || currentState == NPCState.Dead) return;
+
+        if (shapeData.type == ShapeType.Hexagon)
+        {
+            InvestigatePosition(bodyPosition);
+        }
+        else if (currentState != NPCState.CallingGuard)
+        {
+            Debug.Log($"[NPC] {gameObject.name} foi avisado do corpo! A procurar um guarda!");
+            PanicAndFindGuard(bodyPosition);
+        }
+    }
+private ControllerNPC FindReachableNPC(List<ShapeType> allowedTypes)
+    {
+        ControllerNPC nearest = null;
+        float minDist = float.MaxValue;
+        UnityEngine.AI.NavMeshPath testPath = new UnityEngine.AI.NavMeshPath();
+
+        foreach (var npc in FindObjectsByType<ControllerNPC>(FindObjectsSortMode.None))
+        {
+            // Ignore self, dead bodies, disabled NPCs, and people already panicking
+            if (npc == this || !npc.enabled || npc.currentState == NPCState.Dead || npc.currentState == NPCState.CallingGuard) continue;
+            
+            // Only check them if they are the shape we are looking for
+            if (!allowedTypes.Contains(npc.shapeData.type)) continue;
+
+            // Check if the path is physically clear
+            agent.CalculatePath(npc.transform.position, testPath);
+            if (testPath.status != UnityEngine.AI.NavMeshPathStatus.PathComplete) continue;
+
+            float d = Vector2.Distance(transform.position, npc.transform.position);
+            if (d < minDist) 
+            { 
+                minDist = d; 
+                nearest = npc; 
+            }
+        }
+        return nearest;
+    }
     // ──────────────────────────────────────────────────────────────────────────
     // Decision coroutine
     // ──────────────────────────────────────────────────────────────────────────
